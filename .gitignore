@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/*
+!dist/package.json
+release/
+.svelte-kit/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.dmg
+*.snap
+*.AppImage
