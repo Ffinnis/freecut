@@ -1,78 +1,123 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
-	import { uiState } from '$lib/stores/ui.svelte';
+	import { uiState, computePps, computeContentWidth, timeToPixel, pixelToTime } from '$lib/stores/ui.svelte';
 	import TimeRuler from './TimeRuler.svelte';
 
 	let filename = $derived(
 		projectState.project?.sourceFile.split('/').pop() ?? ''
 	);
 
-	let playheadPct = $derived.by(() => {
-		const dur = projectState.totalDuration;
-		if (dur === 0) return 0;
-		return (uiState.currentTime / dur) * 100;
+	let duration = $derived(projectState.totalDuration || 30 * 60);
+
+	let pps = $derived(computePps(uiState.zoomFraction, uiState.viewportWidth, duration));
+	let contentWidth = $derived(computeContentWidth(pps, duration, uiState.viewportWidth));
+	let trackWidth = $derived(timeToPixel(duration, pps));
+	let playheadPx = $derived(timeToPixel(uiState.currentTime, pps));
+
+	let scrollContainer: HTMLDivElement;
+	let prevPps = 0;
+
+	$effect(() => {
+		if (!scrollContainer) return;
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				uiState.viewportWidth = entry.contentRect.width;
+			}
+		});
+		observer.observe(scrollContainer);
+		return () => observer.disconnect();
 	});
+
+	// Zoom-to-center: keep center time stable when zoom changes
+	$effect(() => {
+		const currentPps = pps;
+		if (!scrollContainer || prevPps === 0 || prevPps === currentPps) {
+			prevPps = currentPps;
+			return;
+		}
+		const centerTime = pixelToTime(
+			scrollContainer.scrollLeft + uiState.viewportWidth / 2,
+			prevPps
+		);
+		scrollContainer.scrollLeft = timeToPixel(centerTime, currentPps) - uiState.viewportWidth / 2;
+		prevPps = currentPps;
+	});
+
+	function onScroll() {
+		if (scrollContainer) {
+			uiState.timelineScrollX = scrollContainer.scrollLeft;
+		}
+	}
 </script>
 
 <div class="timeline">
-	<div class="gutter ruler-gutter">
-		<span class="gutter-label">sections</span>
-	</div>
-	<div class="ruler-area">
-		<TimeRuler />
-	</div>
-
-	{#if projectState.hasProject}
-		<!-- Video track -->
-		<div class="gutter track-gutter">
-			<button class="gutter-icon" aria-label="Mute">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-					<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-				</svg>
-			</button>
-			<button class="gutter-icon" aria-label="Visibility">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-					<circle cx="12" cy="12" r="3" />
-				</svg>
-			</button>
+	<!-- Fixed gutter column -->
+	<div class="gutter-column">
+		<div class="gutter ruler-gutter">
+			<span class="gutter-label">sections</span>
 		</div>
-		<div class="track video-track">
-			<div class="track-bar">
-				<span class="track-filename">{filename}</span>
+		{#if projectState.hasProject}
+			<div class="gutter track-gutter">
+				<button class="gutter-icon" aria-label="Mute">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+						<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+					</svg>
+				</button>
+				<button class="gutter-icon" aria-label="Visibility">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+						<circle cx="12" cy="12" r="3" />
+					</svg>
+				</button>
 			</div>
-		</div>
-
-		<!-- Audio track -->
-		<div class="gutter track-gutter">
-			<button class="gutter-icon" aria-label="Mute">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-					<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-				</svg>
-			</button>
-			<button class="gutter-icon" aria-label="Visibility">
-				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-					<circle cx="12" cy="12" r="3" />
-				</svg>
-			</button>
-		</div>
-		<div class="track audio-track">
-			<div class="waveform-placeholder">
-				<span class="track-filename">{filename}</span>
+			<div class="gutter track-gutter">
+				<button class="gutter-icon" aria-label="Mute">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+						<path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+					</svg>
+				</button>
+				<button class="gutter-icon" aria-label="Visibility">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+						<circle cx="12" cy="12" r="3" />
+					</svg>
+				</button>
 			</div>
-		</div>
-	{:else}
-		<div class="gutter empty-gutter"></div>
-		<div class="track empty-track"></div>
-	{/if}
+		{:else}
+			<div class="gutter empty-gutter"></div>
+		{/if}
+	</div>
 
-	<!-- Playhead -->
-	{#if projectState.hasProject && playheadPct > 0}
-		<div class="playhead" style="left: calc(var(--track-gutter-width) + {playheadPct}% * (100% - var(--track-gutter-width)) / 100)"></div>
-	{/if}
+	<!-- Scrollable content area -->
+	<div class="scroll-container" bind:this={scrollContainer} onscroll={onScroll}>
+		<div class="content-sizer" style="width: {contentWidth}px">
+			<div class="ruler-area">
+				<TimeRuler {pps} {duration} />
+			</div>
+
+			{#if projectState.hasProject}
+				<div class="track video-track">
+					<div class="track-bar" style="width: {trackWidth}px">
+						<span class="track-filename">{filename}</span>
+					</div>
+				</div>
+				<div class="track audio-track">
+					<div class="waveform-placeholder" style="width: {trackWidth}px">
+						<span class="track-filename">{filename}</span>
+					</div>
+				</div>
+			{:else}
+				<div class="track empty-track"></div>
+			{/if}
+
+			<!-- Playhead -->
+			{#if projectState.hasProject && playheadPx > 0}
+				<div class="playhead" style="left: {playheadPx}px"></div>
+			{/if}
+		</div>
+	</div>
 </div>
 
 <style>
@@ -80,10 +125,25 @@
 		grid-area: timeline;
 		display: grid;
 		grid-template-columns: var(--track-gutter-width) 1fr;
-		grid-auto-rows: auto;
 		background: var(--bg-primary);
-		overflow-y: auto;
-		overflow-x: hidden;
+		overflow: hidden;
+		position: relative;
+	}
+
+	.gutter-column {
+		display: flex;
+		flex-direction: column;
+		border-right: 1px solid var(--border);
+		z-index: 2;
+	}
+
+	.scroll-container {
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+
+	.content-sizer {
+		min-width: 100%;
 		position: relative;
 	}
 
@@ -94,11 +154,11 @@
 		justify-content: center;
 		gap: 0.25rem;
 		background: var(--bg-primary);
-		border-right: 1px solid var(--border);
 		padding: 0.25rem;
 	}
 
 	.ruler-gutter {
+		height: 24px;
 		border-bottom: 1px solid var(--border);
 	}
 
@@ -186,6 +246,7 @@
 
 	.empty-track {
 		background: var(--bg-secondary);
+		min-height: 48px;
 	}
 
 	.empty-gutter {
@@ -193,8 +254,10 @@
 	}
 
 	.track-gutter {
+		min-height: 48px;
 		gap: 0.125rem;
 		padding: 0.125rem;
+		border-bottom: 1px solid var(--border);
 	}
 
 	.playhead {

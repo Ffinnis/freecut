@@ -38,10 +38,10 @@
 		<input
 			type="range"
 			class="zoom-slider"
-			min="1"
-			max="20"
-			step="0.5"
-			bind:value={uiState.zoomLevel}
+			min="0"
+			max="1"
+			step="0.005"
+			bind:value={uiState.zoomFraction}
 		/>
 	</div>
 </div>
