@@ -8,6 +8,7 @@ class UIState {
 	timelineScrollX = $state(0);
 	viewportWidth = $state(1500);
 	showCustomize = $state(false);
+	selectedSegmentId = $state<string | null>(null);
 
 	get formattedTimecode(): string {
 		const total = Math.floor(this.currentTime);
@@ -49,6 +50,10 @@ class UIState {
 		this.currentTime = 0;
 		this.requestedSeekTime = 0;
 		this.seekRequestId = crypto.randomUUID();
+	}
+
+	selectSegment(segmentId: string | null) {
+		this.selectedSegmentId = segmentId;
 	}
 }
 

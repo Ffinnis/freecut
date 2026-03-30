@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
+	import { uiState } from '$lib/stores/ui.svelte';
 
 	function formatTime(seconds: number): string {
 		const m = Math.floor(seconds / 60);
 		const s = Math.floor(seconds % 60);
 		return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+	}
+
+	function selectSegment(segmentId: string | null, start: number) {
+		uiState.selectSegment(segmentId);
+		uiState.requestSeek(start, projectState.totalDuration);
 	}
 </script>
 
@@ -16,7 +22,11 @@
 	{:else}
 		<div class="segment-list">
 			{#each projectState.project!.segments as segment}
-				<button class="segment-row">
+				<button
+					class="segment-row"
+					class:selected={uiState.selectedSegmentId === segment.id}
+					onclick={() => selectSegment(segment.type === 'silence' ? segment.id : null, segment.start)}
+				>
 					<span class="type-badge" class:silence={segment.type === 'silence'} class:speech={segment.type === 'speech'}>
 						{segment.type === 'silence' ? 'S' : 'V'}
 					</span>
@@ -65,6 +75,11 @@
 
 	.segment-row:hover {
 		background: var(--bg-surface);
+	}
+
+	.segment-row.selected {
+		background: rgba(255, 255, 255, 0.08);
+		outline: 1px solid rgba(255, 255, 255, 0.24);
 	}
 
 	.type-badge {

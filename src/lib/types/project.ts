@@ -22,6 +22,7 @@ export interface DetectionSettings {
 	intensity: IntensityPreset;
 	thresholdAuto: boolean;
 	thresholdValue: number;
+	manualThresholdValue: number;
 	minSilenceDuration: number;
 	paddingBefore: number;
 	paddingAfter: number;
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: DetectionSettings = {
 	intensity: 'fast',
 	thresholdAuto: true,
 	thresholdValue: 0.032,
+	manualThresholdValue: 0.032,
 	minSilenceDuration: 400,
 	paddingBefore: 100,
 	paddingAfter: 100

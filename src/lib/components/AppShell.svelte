@@ -11,9 +11,24 @@
 	function isEditableTarget(target: EventTarget | null) {
 		if (!(target instanceof HTMLElement)) return false;
 
+		if (target.isContentEditable || target.closest('[contenteditable="true"], textarea, select')) {
+			return true;
+		}
+
+		const input = target.closest('input');
+		if (!(input instanceof HTMLInputElement)) return false;
+
+		return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(input.type);
+	}
+
+	function isDeleteKey(event: KeyboardEvent) {
 		return (
-			target.isContentEditable ||
-			target.closest('input, textarea, select, [contenteditable="true"]') !== null
+			event.key === 'Backspace' ||
+			event.key === 'Delete' ||
+			event.code === 'Backspace' ||
+			event.code === 'Delete' ||
+			event.keyCode === 8 ||
+			event.keyCode === 46
 		);
 	}
 
@@ -28,15 +43,25 @@
 		if (typeof window === 'undefined') return;
 
 		const handleKeydown = (event: KeyboardEvent) => {
-			if (event.defaultPrevented || event.repeat || event.code !== 'Space') return;
-			if (!projectState.hasProject || isEditableTarget(event.target)) return;
+			if (event.defaultPrevented || event.repeat || isEditableTarget(event.target)) return;
 
-			event.preventDefault();
-			uiState.togglePlayback();
+			if (event.code === 'Space') {
+				if (!projectState.hasProject) return;
+				event.preventDefault();
+				uiState.togglePlayback();
+				return;
+			}
+
+			if (isDeleteKey(event) && uiState.selectedSegmentId) {
+				if (projectState.toggleSilenceSegmentAction(uiState.selectedSegmentId)) {
+					event.preventDefault();
+					event.stopPropagation();
+				}
+			}
 		};
 
-		window.addEventListener('keydown', handleKeydown);
-		return () => window.removeEventListener('keydown', handleKeydown);
+		window.addEventListener('keydown', handleKeydown, true);
+		return () => window.removeEventListener('keydown', handleKeydown, true);
 	});
 </script>
 

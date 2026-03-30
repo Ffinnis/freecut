@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState } from '$lib/stores/ui.svelte';
-	import { INTENSITY_PRESETS, type IntensityPreset } from '$lib/types/project';
+	import type { IntensityPreset } from '$lib/types/project';
 
 	const presets: IntensityPreset[] = ['no-cuts', 'natural', 'fast', 'super'];
 	const labels = ['No cuts', 'Natural', 'Fast', 'Super'];
@@ -11,28 +11,32 @@
 	function onIntensityInput(e: Event) {
 		const idx = parseInt((e.target as HTMLInputElement).value);
 		const preset = presets[idx];
-		projectState.settings.intensity = preset;
-		const mapping = INTENSITY_PRESETS[preset];
-		projectState.settings.minSilenceDuration = mapping.minSilenceDuration;
-		projectState.settings.paddingBefore = mapping.paddingBefore;
-		projectState.settings.paddingAfter = mapping.paddingAfter;
+		projectState.applyIntensityPreset(preset);
 	}
 
 	function onThresholdInput(e: Event) {
-		projectState.settings.thresholdValue = parseFloat((e.target as HTMLInputElement).value);
+		projectState.setManualThresholdValue(parseFloat((e.target as HTMLInputElement).value), { live: true });
 	}
 
 	function onThresholdNumber(e: Event) {
 		const val = parseFloat((e.target as HTMLInputElement).value);
 		if (!isNaN(val) && val >= 0 && val <= 1) {
-			projectState.settings.thresholdValue = val;
+			projectState.setManualThresholdValue(val);
 		}
+	}
+
+	function onThresholdAutoChange(e: Event) {
+		projectState.setThresholdAuto((e.target as HTMLInputElement).checked);
 	}
 </script>
 
 <div class="silence-tab">
 	<div class="action-row">
-		<button class="remove-btn" disabled={!projectState.hasProject}>
+		<button
+			class="remove-btn"
+			disabled={!projectState.canDetectSilence}
+			onclick={() => projectState.runSilenceDetection()}
+		>
 			Remove Silence
 		</button>
 		<button class="gear-btn" aria-label="Settings">
@@ -74,7 +78,8 @@
 			<label class="auto-check">
 				<input
 					type="checkbox"
-					bind:checked={projectState.settings.thresholdAuto}
+					checked={projectState.settings.thresholdAuto}
+					onchange={onThresholdAutoChange}
 				/>
 				Auto
 			</label>
@@ -92,7 +97,7 @@
 			min="0"
 			max="1"
 			step="0.001"
-			value={projectState.settings.thresholdValue}
+			value={projectState.settings.manualThresholdValue}
 			disabled={projectState.settings.thresholdAuto}
 			oninput={onThresholdInput}
 		/>

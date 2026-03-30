@@ -53,9 +53,7 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Custom Electron media protocol with byte-range streaming for local seekable playback
 
 ### Not yet started
-- [ ] Silence detection engine (FFmpeg silencedetect)
-- [ ] Segment highlighting on timeline
-- [ ] Timeline editing (toggle, drag edges, undo/redo)
+- [ ] Timeline editing (drag edges, undo/redo)
 - [ ] Video preview with cut playback
 - [ ] Export: re-encode (MP4, MOV, WAV, MP3)
 - [ ] Export: EDL, FCP XML, AAF generators
@@ -67,6 +65,13 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] FFmpeg-based peak extraction pipeline (electron → IPC → renderer)
 - [x] Progressive streaming for large files
 - [x] Mipmap-based level-of-detail for zoom performance
+- [x] Waveform-peak-based silence detection pipeline (renderer-side, no second FFmpeg pass)
+- [x] Auto/manual threshold resolution with always-visible threshold overlay
+- [x] Clickable silence regions on the timeline with selected-state border
+- [x] Delete/trash toggle for selected silence segments (`remove` ↔ `keep`)
+- [x] Sections panel synced to timeline selection + seek
+- [x] Live threshold drag updates coalesced to animation frames for responsiveness
+- [x] macOS delete shortcut behavior fixed after range-input focus
 
 ## Day 4 — Video preview foundations
 

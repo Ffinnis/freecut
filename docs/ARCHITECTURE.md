@@ -32,8 +32,10 @@ free-cut/
 │   │   │   ├── project.ts # Project, Segment, DetectionSettings interfaces
 │   │   │   └── ipc.ts     # ElectronAPI, WaveformData, WaveformChunk types
 │   │   ├── stores/
-│   │   │   ├── project.svelte.ts  # Project state + waveform lifecycle
-│   │   │   └── ui.svelte.ts       # UI state (tabs, playback, playhead, zoom, seek requests)
+│   │   │   ├── project.svelte.ts  # Project state, waveform lifecycle, silence detection, segment edits
+│   │   │   └── ui.svelte.ts       # UI state (tabs, playback, playhead, zoom, seek requests, selected segment)
+│   │   ├── utils/
+│   │   │   └── silenceDetection.ts # Waveform-envelope silence detection + segment rebuilding
 │   │   └── components/
 │   │       ├── AppShell.svelte       # CSS Grid layout (preview/sidebar/transport/timeline/status)
 │   │       ├── DropZone.svelte       # File drag-and-drop + triggers waveform extraction
@@ -169,17 +171,40 @@ A custom canvas component draws the visible waveform slice, synced with the time
 
 Visual style: mirrored green bars (`rgba(74, 222, 128, 0.65)`) centered vertically, minimum 1px height for near-silence.
 
+## Silence Detection
+
+Silence detection currently runs in the renderer on top of the extracted waveform envelope rather than using a second FFmpeg `silencedetect` pass. This keeps threshold and intensity changes interactive and avoids duplicating analysis work already done for waveform extraction.
+
+Pipeline in `src/lib/utils/silenceDetection.ts`:
+
+1. Resolve the effective threshold:
+   - **manual mode** uses `manualThresholdValue`
+   - **auto mode** estimates a noise floor from the 20th percentile of non-zero peaks, scaled and clamped
+2. Mark peaks below threshold as silent.
+3. Close tiny speech gaps (`75ms`) so brief spikes do not split one pause into multiple regions.
+4. Keep only silent runs above the current intensity preset's `minSilenceDuration`.
+5. Trim silence runs by `paddingBefore` and `paddingAfter`, then merge overlaps.
+6. Rebuild the full alternating `speech` / `silence` segment list used by the timeline, sections panel, and status bar.
+
+Detection is triggered:
+- automatically when waveform extraction completes
+- manually from the `Remove Silence` button
+- when intensity changes
+- when threshold mode/value changes
+
+Manual threshold dragging is coalesced to `requestAnimationFrame` so visual updates stay live without making the slider feel blocked.
+
 ## State Management
 
 Two Svelte 5 runes stores (class-based with `$state`):
-- **projectState** (`project.svelte.ts`): project data, segments, detection settings, waveform data + loading lifecycle
-- **uiState** (`ui.svelte.ts`): active tab, playback state, current playhead time, zoom fraction, viewport width, and explicit seek requests
+- **projectState** (`project.svelte.ts`): project data, detection settings, waveform data, silence detection scheduling, segment edits, and waveform lifecycle
+- **uiState** (`ui.svelte.ts`): active tab, playback state, current playhead time, zoom fraction, viewport width, explicit seek requests, and the selected segment id
 
 Playback flow:
 
 1. `VideoPreview.svelte` owns the actual HTML5 media element.
 2. The media element publishes playback time into `uiState` for the transport timecode and timeline playhead.
-3. `TransportBar.svelte` toggles `uiState.isPlaying`; `AppShell.svelte` adds the global `Space` shortcut outside editable controls.
+3. `TransportBar.svelte` toggles `uiState.isPlaying`; `AppShell.svelte` adds the global `Space` shortcut plus `Delete`/`Backspace` toggle for the selected silence segment outside text-entry controls.
 4. `Timeline.svelte` converts pointer positions into time values and issues explicit seek requests back to the preview player.
 
 ## Timeline Zoom System
@@ -194,15 +219,16 @@ pps    = minPps × (maxPps / minPps) ^ zoomFraction
 
 Key components:
 - **ui.svelte.ts** exports pure zoom math functions (`computePps`, `timeToPixel`, etc.) used by all timeline components
-- **Timeline.svelte** has a fixed gutter column + scrollable content area; measures viewport with `ResizeObserver`; stabilizes scroll position on zoom (zoom-to-center); maps pointer input to seek positions using the scrolled viewport coordinate space
+- **Timeline.svelte** has a fixed gutter column + scrollable content area; measures viewport with `ResizeObserver`; stabilizes scroll position on zoom (zoom-to-center); maps pointer input to seek positions using the scrolled viewport coordinate space; hit-tests silence regions on the audio track for selection
 - **TimeRuler.svelte** picks tick intervals based on pps (targeting ~100px spacing), snaps to nice values (0.1s–1h), and viewport-culls to only render visible ticks
+- **WaveformCanvas.svelte** renders the threshold band, silence overlays, waveform bars, and selected-segment border in a single canvas pass
 
 ## Data Model
 
 Core types in `src/lib/types/project.ts`:
 - **Project**: source file, duration, segments, detection settings
 - **Segment**: start/end times, type (speech/silence), action (keep/remove/speed)
-- **DetectionSettings**: intensity preset, threshold, padding, min silence duration
+- **DetectionSettings**: intensity preset, effective threshold, manual threshold, padding, min silence duration
 - **IntensityPreset**: `no-cuts | natural | fast | super`
 
 Waveform types in `src/lib/types/ipc.ts`:

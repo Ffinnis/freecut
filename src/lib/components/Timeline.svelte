@@ -4,6 +4,7 @@
 	import TimeRuler from './TimeRuler.svelte';
 	import WaveformCanvas from './WaveformCanvas.svelte';
 
+	const RULER_HEIGHT = 24;
 	const TRACK_ROW_HEIGHT = 48;
 
 	let filename = $derived(
@@ -64,9 +65,38 @@
 		uiState.requestSeek(nextTime, duration);
 	}
 
+	function pointerTime(event: PointerEvent) {
+		if (!scrollContainer) return 0;
+
+		const rect = scrollContainer.getBoundingClientRect();
+		const localX = scrollContainer.scrollLeft + event.clientX - rect.left;
+		const clampedX = Math.min(Math.max(localX, 0), trackWidth);
+		return pixelToTime(clampedX, pps);
+	}
+
+	function isAudioTrackPointer(event: PointerEvent) {
+		if (!scrollContainer) return false;
+
+		const rect = scrollContainer.getBoundingClientRect();
+		const localY = event.clientY - rect.top;
+		const audioTrackTop = RULER_HEIGHT + TRACK_ROW_HEIGHT;
+		const audioTrackBottom = audioTrackTop + TRACK_ROW_HEIGHT;
+		return localY >= audioTrackTop && localY <= audioTrackBottom;
+	}
+
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 || !projectState.hasProject) return;
 
+		if (isAudioTrackPointer(event)) {
+			const clickedSegment = projectState.findSilenceSegmentAtTime(pointerTime(event));
+			if (clickedSegment) {
+				uiState.selectSegment(clickedSegment.id);
+				event.preventDefault();
+				return;
+			}
+		}
+
+		uiState.selectSegment(null);
 		isSeeking = true;
 		activePointerId = event.pointerId;
 		seekFromPointer(event);
@@ -171,6 +201,9 @@
 								{pps}
 								scrollX={uiState.timelineScrollX}
 								viewportWidth={uiState.viewportWidth}
+								segments={projectState.project?.segments ?? []}
+								selectedSegmentId={uiState.selectedSegmentId}
+								thresholdValue={projectState.settings.thresholdValue}
 								height={TRACK_ROW_HEIGHT}
 							/>
 							<span class="track-filename waveform-label">{filename}</span>
