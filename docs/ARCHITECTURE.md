@@ -105,7 +105,22 @@ The app uses a CSS Grid shell (`AppShell.svelte`) dividing the window into 5 zon
 
 Two Svelte 5 runes stores (class-based with `$state`):
 - **projectState** (`project.svelte.ts`): project data, segments, detection settings
-- **uiState** (`ui.svelte.ts`): active tab, playhead position, zoom level, playback state
+- **uiState** (`ui.svelte.ts`): active tab, playhead position, zoom fraction, viewport width, playback state
+
+## Timeline Zoom System
+
+The timeline uses pixel-based positioning with horizontal scrolling. Zoom is controlled by a `zoomFraction` (0–1) that maps logarithmically to pixels-per-second (pps):
+
+```
+minPps = viewportWidth / (4 × duration)   → min zoom: 4× duration visible
+maxPps = viewportWidth / 4                 → max zoom: ~4 seconds visible
+pps    = minPps × (maxPps / minPps) ^ zoomFraction
+```
+
+Key components:
+- **ui.svelte.ts** exports pure zoom math functions (`computePps`, `timeToPixel`, etc.) used by all timeline components
+- **Timeline.svelte** has a fixed gutter column + scrollable content area; measures viewport with `ResizeObserver`; stabilizes scroll position on zoom (zoom-to-center)
+- **TimeRuler.svelte** picks tick intervals based on pps (targeting ~100px spacing), snaps to nice values (0.1s–1h), and viewport-culls to only render visible ticks
 
 ## Data Model
 

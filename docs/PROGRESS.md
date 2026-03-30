@@ -31,6 +31,11 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Sections tab: segment list with type badges
 - [x] Export tab: format grid + editor project options
 
+- [x] Timeline zoom: pixel-based positioning with horizontal scroll (matches Recut zoom behavior)
+- [x] Logarithmic zoom slider (min: 4× duration visible, max: ~4s visible on 16" screen)
+- [x] Viewport-culled tick rendering for performance at high zoom
+- [x] Zoom-to-center scroll stabilization
+
 ### Not yet started
 - [ ] Silence detection engine (FFmpeg silencedetect)
 - [ ] Waveform rendering (wavesurfer.js)
