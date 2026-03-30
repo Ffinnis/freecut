@@ -4,6 +4,8 @@
 	import TimeRuler from './TimeRuler.svelte';
 	import WaveformCanvas from './WaveformCanvas.svelte';
 
+	const TRACK_ROW_HEIGHT = 48;
+
 	let filename = $derived(
 		projectState.project?.sourceFile.split('/').pop() ?? ''
 	);
@@ -17,6 +19,8 @@
 
 	let scrollContainer: HTMLDivElement;
 	let prevPps = 0;
+	let isSeeking = $state(false);
+	let activePointerId = $state<number | null>(null);
 
 	$effect(() => {
 		if (!scrollContainer) return;
@@ -49,6 +53,54 @@
 			uiState.timelineScrollX = scrollContainer.scrollLeft;
 		}
 	}
+
+	function seekFromPointer(event: PointerEvent) {
+		if (!scrollContainer) return;
+
+		const rect = scrollContainer.getBoundingClientRect();
+		const localX = scrollContainer.scrollLeft + event.clientX - rect.left;
+		const clampedX = Math.min(Math.max(localX, 0), trackWidth);
+		const nextTime = pixelToTime(clampedX, pps);
+		uiState.requestSeek(nextTime, duration);
+	}
+
+	function handlePointerDown(event: PointerEvent) {
+		if (event.button !== 0 || !projectState.hasProject) return;
+
+		isSeeking = true;
+		activePointerId = event.pointerId;
+		seekFromPointer(event);
+		event.preventDefault();
+	}
+
+	function handlePointerMove(event: PointerEvent) {
+		if (!isSeeking || activePointerId !== event.pointerId) return;
+		seekFromPointer(event);
+	}
+
+	function stopSeeking(event: PointerEvent) {
+		if (!isSeeking || activePointerId !== event.pointerId) return;
+
+		isSeeking = false;
+		activePointerId = null;
+	}
+
+	$effect(() => {
+		if (typeof window === 'undefined' || !isSeeking) return;
+
+		const handleMove = (event: PointerEvent) => handlePointerMove(event);
+		const handleStop = (event: PointerEvent) => stopSeeking(event);
+
+		window.addEventListener('pointermove', handleMove);
+		window.addEventListener('pointerup', handleStop);
+		window.addEventListener('pointercancel', handleStop);
+
+		return () => {
+			window.removeEventListener('pointermove', handleMove);
+			window.removeEventListener('pointerup', handleStop);
+			window.removeEventListener('pointercancel', handleStop);
+		};
+	});
 </script>
 
 <div class="timeline">
@@ -93,7 +145,13 @@
 
 	<!-- Scrollable content area -->
 	<div class="scroll-container" bind:this={scrollContainer} onscroll={onScroll}>
-		<div class="content-sizer" style="width: {contentWidth}px">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="content-sizer"
+			class:seeking={isSeeking}
+			style="width: {contentWidth}px"
+			onpointerdown={handlePointerDown}
+		>
 			<div class="ruler-area">
 				<TimeRuler {pps} {duration} />
 			</div>
@@ -113,6 +171,7 @@
 								{pps}
 								scrollX={uiState.timelineScrollX}
 								viewportWidth={uiState.viewportWidth}
+								height={TRACK_ROW_HEIGHT}
 							/>
 							<span class="track-filename waveform-label">{filename}</span>
 						</div>
@@ -163,6 +222,11 @@
 	.content-sizer {
 		min-width: 100%;
 		position: relative;
+		cursor: pointer;
+	}
+
+	.content-sizer.seeking {
+		cursor: ew-resize;
 	}
 
 	.gutter {
@@ -211,7 +275,7 @@
 	}
 
 	.track {
-		min-height: 48px;
+		height: var(--track-row-height);
 		position: relative;
 		border-bottom: 1px solid var(--border);
 	}
@@ -221,7 +285,7 @@
 	}
 
 	.track-bar {
-		height: 100%;
+		height: var(--track-row-height);
 		background: var(--track-green);
 		opacity: 0.7;
 		display: flex;
@@ -298,15 +362,15 @@
 
 	.empty-track {
 		background: var(--bg-secondary);
-		min-height: 48px;
+		height: var(--track-row-height);
 	}
 
 	.empty-gutter {
-		min-height: 48px;
+		height: var(--track-row-height);
 	}
 
 	.track-gutter {
-		min-height: 48px;
+		height: var(--track-row-height);
 		gap: 0.125rem;
 		padding: 0.125rem;
 		border-bottom: 1px solid var(--border);

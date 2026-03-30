@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
+	import { uiState } from '$lib/stores/ui.svelte';
 	import DropZone from './DropZone.svelte';
 	import VideoPreview from './VideoPreview.svelte';
 	import Sidebar from './Sidebar.svelte';
@@ -7,11 +8,35 @@
 	import Timeline from './Timeline.svelte';
 	import StatusBar from './StatusBar.svelte';
 
+	function isEditableTarget(target: EventTarget | null) {
+		if (!(target instanceof HTMLElement)) return false;
+
+		return (
+			target.isContentEditable ||
+			target.closest('input, textarea, select, [contenteditable="true"]') !== null
+		);
+	}
+
 	$effect(() => {
 		if (typeof window === 'undefined' || !window.electronAPI?.onWaveformChunk) return;
 		return window.electronAPI.onWaveformChunk((chunk) => {
 			projectState.applyWaveformChunk(chunk);
 		});
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+
+		const handleKeydown = (event: KeyboardEvent) => {
+			if (event.defaultPrevented || event.repeat || event.code !== 'Space') return;
+			if (!projectState.hasProject || isEditableTarget(event.target)) return;
+
+			event.preventDefault();
+			uiState.togglePlayback();
+		};
+
+		window.addEventListener('keydown', handleKeydown);
+		return () => window.removeEventListener('keydown', handleKeydown);
 	});
 </script>
 

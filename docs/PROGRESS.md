@@ -27,7 +27,7 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Timeline: time ruler, video/audio track rows, gutter controls
 - [x] Status bar: FPS, duration summary, zoom slider
 - [x] Drop zone refactored with dashed circle (Recut-style)
-- [x] Video preview placeholder
+- [x] Video preview player for local media files
 - [x] Sections tab: segment list with type badges
 - [x] Export tab: format grid + editor project options
 
@@ -47,6 +47,10 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Waveform synced with timeline zoom/scroll system
 - [x] Loading animation (pulse) during extraction
 - [x] Graceful fallback for files with no audio
+- [x] Basic video playback in preview (transport button + `Space`)
+- [x] Smooth playhead/timecode sync from the media clock
+- [x] Timeline seeking by click and drag
+- [x] Custom Electron media protocol with byte-range streaming for local seekable playback
 
 ### Not yet started
 - [ ] Silence detection engine (FFmpeg silencedetect)
@@ -64,8 +68,16 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Progressive streaming for large files
 - [x] Mipmap-based level-of-detail for zoom performance
 
+## Day 4 — Video preview foundations
+
+### Completed
+- [x] HTML5 video preview bound to the loaded project file
+- [x] Shared playback state between preview, transport bar, timecode, and timeline playhead
+- [x] Global `Space` shortcut for play/pause outside editable controls
+- [x] Timeline scrub/seek interaction wired back into the media element
+- [x] Preview duration available before waveform extraction completes
+
 ## Day 3 — Timeline editing
-## Day 4 — Video preview with cut playback
 ## Day 5 — FFmpeg re-encode export
 ## Day 6 — EDL, FCP XML, AAF export
 ## Day 7 — Polish, README, release

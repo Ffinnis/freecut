@@ -26,7 +26,12 @@
 	</div>
 
 	<div class="center">
-		<button class="transport-btn play-btn" aria-label="Play" onclick={() => uiState.isPlaying = !uiState.isPlaying}>
+		<button
+			class="transport-btn play-btn"
+			aria-label={uiState.isPlaying ? 'Pause' : 'Play'}
+			disabled={!projectState.hasProject}
+			onclick={() => uiState.togglePlayback()}
+		>
 			{#if uiState.isPlaying}
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<rect x="6" y="4" width="4" height="16" />
@@ -94,6 +99,16 @@
 	.transport-btn:hover {
 		background: var(--bg-elevated);
 		color: var(--text-primary);
+	}
+
+	.transport-btn:disabled {
+		cursor: default;
+		opacity: 0.45;
+	}
+
+	.transport-btn:disabled:hover {
+		background: none;
+		color: var(--text-secondary);
 	}
 
 	.segments-btn {

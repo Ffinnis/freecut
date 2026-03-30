@@ -2,6 +2,8 @@ class UIState {
 	activeTab = $state<'silence' | 'sections' | 'export'>('silence');
 	isPlaying = $state(false);
 	currentTime = $state(0);
+	requestedSeekTime = $state(0);
+	seekRequestId = $state('');
 	zoomFraction = $state(0);
 	timelineScrollX = $state(0);
 	viewportWidth = $state(1500);
@@ -14,6 +16,39 @@ class UIState {
 		const s = total % 60;
 		const f = Math.floor((this.currentTime - total) * 30);
 		return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(f).padStart(2, '0')}`;
+	}
+
+	setPlaybackState(next: boolean) {
+		this.isPlaying = next;
+	}
+
+	togglePlayback() {
+		this.isPlaying = !this.isPlaying;
+	}
+
+	setCurrentTime(next: number) {
+		this.currentTime = Number.isFinite(next) && next >= 0 ? next : 0;
+	}
+
+	setPlaybackTime(next: number, duration = Number.POSITIVE_INFINITY) {
+		const safeDuration = Number.isFinite(duration) && duration >= 0 ? duration : 0;
+		const clamped = Math.min(Math.max(next, 0), safeDuration);
+		this.setCurrentTime(clamped);
+	}
+
+	requestSeek(next: number, duration = Number.POSITIVE_INFINITY) {
+		const safeDuration = Number.isFinite(duration) && duration >= 0 ? duration : 0;
+		const clamped = Math.min(Math.max(next, 0), safeDuration);
+		this.requestedSeekTime = clamped;
+		this.setCurrentTime(clamped);
+		this.seekRequestId = crypto.randomUUID();
+	}
+
+	resetPlayback() {
+		this.isPlaying = false;
+		this.currentTime = 0;
+		this.requestedSeekTime = 0;
+		this.seekRequestId = crypto.randomUUID();
 	}
 }
 

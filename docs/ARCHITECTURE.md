@@ -18,7 +18,7 @@ free-cut is a desktop app built with SvelteKit (renderer) + Electron (main proce
 ```
 free-cut/
 ├── electron/              # Electron main process (TypeScript → CommonJS)
-│   ├── main.ts            # BrowserWindow, IPC handlers, dev/prod loading
+│   ├── main.ts            # BrowserWindow, IPC handlers, dev/prod loading, local media protocol
 │   ├── preload.ts         # contextBridge API exposed to renderer
 │   ├── ffmpeg.ts          # FFmpeg binary path resolution
 │   ├── waveform.ts        # FFmpeg audio peak extraction + streaming chunks
@@ -33,17 +33,17 @@ free-cut/
 │   │   │   └── ipc.ts     # ElectronAPI, WaveformData, WaveformChunk types
 │   │   ├── stores/
 │   │   │   ├── project.svelte.ts  # Project state + waveform lifecycle
-│   │   │   └── ui.svelte.ts       # UI state (tabs, playhead, zoom)
+│   │   │   └── ui.svelte.ts       # UI state (tabs, playback, playhead, zoom, seek requests)
 │   │   └── components/
 │   │       ├── AppShell.svelte       # CSS Grid layout (preview/sidebar/transport/timeline/status)
 │   │       ├── DropZone.svelte       # File drag-and-drop + triggers waveform extraction
-│   │       ├── VideoPreview.svelte   # Video player area (placeholder)
+│   │       ├── VideoPreview.svelte   # HTML5 video preview + clock sync
 │   │       ├── Sidebar.svelte        # Right sidebar with tab switching
 │   │       ├── SilenceTab.svelte     # Silence detection controls (intensity/threshold)
 │   │       ├── SectionsTab.svelte    # Segment list panel
 │   │       ├── ExportTab.svelte      # Export format selection panel
 │   │       ├── TransportBar.svelte   # Playback controls + timecode
-│   │       ├── Timeline.svelte       # Timeline with tracks + gutter + waveform
+│   │       ├── Timeline.svelte       # Timeline with tracks + gutter + waveform + seek interaction
 │   │       ├── TimeRuler.svelte      # Adaptive time ruler
 │   │       ├── WaveformCanvas.svelte # Canvas waveform renderer with mipmap LOD
 │   │       └── StatusBar.svelte      # FPS, duration summary, zoom
@@ -80,6 +80,7 @@ free-cut/
 - `contextIsolation: true`, `nodeIntegration: false`
 - Preload script uses `contextBridge.exposeInMainWorld` to expose typed `window.electronAPI`
 - Renderer never touches Node.js directly
+- Local preview playback is exposed through a custom Electron protocol instead of direct `file://` renderer access
 
 ## IPC Channels
 
@@ -90,6 +91,15 @@ free-cut/
 | `media:extractWaveform` | renderer → main | Extract audio peaks from media file |
 | `media:waveformChunk` | main → renderer | Progressive waveform data chunks |
 | `file:opened` | main → renderer | Notify renderer of externally opened file |
+
+## Local Media Playback
+
+Preview playback uses a custom Electron protocol, `freecut-media://`, registered in `electron/main.ts`.
+
+- The renderer never loads project files via raw `file://` URLs.
+- The protocol resolves the requested source file on the main-process side and streams it back to Chromium.
+- Byte-range requests are handled explicitly (`206 Partial Content`, `Content-Range`, `Accept-Ranges`) so the HTML5 `<video>` element can seek immediately to arbitrary frames.
+- Waveform extraction is a separate FFmpeg job and no longer blocks the preview from loading its first frame or metadata.
 
 ## UI Layout
 
@@ -163,7 +173,14 @@ Visual style: mirrored green bars (`rgba(74, 222, 128, 0.65)`) centered vertical
 
 Two Svelte 5 runes stores (class-based with `$state`):
 - **projectState** (`project.svelte.ts`): project data, segments, detection settings, waveform data + loading lifecycle
-- **uiState** (`ui.svelte.ts`): active tab, playhead position, zoom fraction, viewport width, playback state
+- **uiState** (`ui.svelte.ts`): active tab, playback state, current playhead time, zoom fraction, viewport width, and explicit seek requests
+
+Playback flow:
+
+1. `VideoPreview.svelte` owns the actual HTML5 media element.
+2. The media element publishes playback time into `uiState` for the transport timecode and timeline playhead.
+3. `TransportBar.svelte` toggles `uiState.isPlaying`; `AppShell.svelte` adds the global `Space` shortcut outside editable controls.
+4. `Timeline.svelte` converts pointer positions into time values and issues explicit seek requests back to the preview player.
 
 ## Timeline Zoom System
 
@@ -177,7 +194,7 @@ pps    = minPps × (maxPps / minPps) ^ zoomFraction
 
 Key components:
 - **ui.svelte.ts** exports pure zoom math functions (`computePps`, `timeToPixel`, etc.) used by all timeline components
-- **Timeline.svelte** has a fixed gutter column + scrollable content area; measures viewport with `ResizeObserver`; stabilizes scroll position on zoom (zoom-to-center)
+- **Timeline.svelte** has a fixed gutter column + scrollable content area; measures viewport with `ResizeObserver`; stabilizes scroll position on zoom (zoom-to-center); maps pointer input to seek positions using the scrolled viewport coordinate space
 - **TimeRuler.svelte** picks tick intervals based on pps (targeting ~100px spacing), snaps to nice values (0.1s–1h), and viewport-culls to only render visible ticks
 
 ## Data Model

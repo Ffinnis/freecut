@@ -30,6 +30,11 @@ class ProjectState {
 			.length;
 	}
 
+	setDuration(duration: number) {
+		if (!this.project || !Number.isFinite(duration) || duration <= 0) return;
+		this.project.duration = duration;
+	}
+
 	beginWaveformLoad(path: string): string {
 		const requestId = crypto.randomUUID();
 
