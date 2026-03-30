@@ -3,19 +3,27 @@
 
 	let isDragOver = $state(false);
 
+	async function loadFile(path: string) {
+		if (!window.electronAPI?.extractWaveform) return;
+
+		const supportsWaveformChunks = typeof window.electronAPI?.onWaveformChunk === 'function';
+		const requestId = projectState.beginWaveformLoad(path);
+
+		try {
+			const data = await window.electronAPI.extractWaveform(
+				supportsWaveformChunks ? { filePath: path, requestId } : path
+			);
+			projectState.finishWaveformLoad(requestId, path, data);
+		} catch (err) {
+			console.error('Waveform extraction failed:', err);
+			projectState.failWaveformLoad(requestId);
+		}
+	}
+
 	async function handleBrowse() {
 		if (typeof window !== 'undefined' && window.electronAPI) {
 			const path = await window.electronAPI.openFile();
-			if (path) {
-				projectState.project = {
-					id: crypto.randomUUID(),
-					sourceFile: path,
-					duration: 0,
-					sampleRate: 44100,
-					segments: [],
-					settings: { ...projectState.settings }
-				};
-			}
+			if (path) loadFile(path);
 		}
 	}
 
@@ -35,14 +43,7 @@
 		if (files && files.length > 0) {
 			const file = files[0];
 			const path = (file as File & { path?: string }).path || file.name;
-			projectState.project = {
-				id: crypto.randomUUID(),
-				sourceFile: path,
-				duration: 0,
-				sampleRate: 44100,
-				segments: [],
-				settings: { ...projectState.settings }
-			};
+			loadFile(path);
 		}
 	}
 </script>

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import serve from 'electron-serve';
+import { extractWaveform } from './waveform';
 
 const isDev = !app.isPackaged;
 
@@ -72,6 +73,19 @@ function registerIpcHandlers() {
 
 		return result.filePaths[0];
 	});
+
+	ipcMain.handle(
+		'media:extractWaveform',
+		async (event, request: { filePath: string; requestId: string } | string) => {
+			const payload = typeof request === 'string'
+				? { filePath: request, requestId: `legacy-${Date.now()}` }
+				: request;
+
+			return extractWaveform(payload.filePath, payload.requestId, (chunk) => {
+				event.sender.send('media:waveformChunk', chunk);
+			});
+		}
+	);
 
 	ipcMain.handle('dialog:saveFile', async (_event, defaultName: string) => {
 		const result = await dialog.showSaveDialog(mainWindow!, {

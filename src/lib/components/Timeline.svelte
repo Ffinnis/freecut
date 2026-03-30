@@ -2,6 +2,7 @@
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState, computePps, computeContentWidth, timeToPixel, pixelToTime } from '$lib/stores/ui.svelte';
 	import TimeRuler from './TimeRuler.svelte';
+	import WaveformCanvas from './WaveformCanvas.svelte';
 
 	let filename = $derived(
 		projectState.project?.sourceFile.split('/').pop() ?? ''
@@ -104,9 +105,26 @@
 					</div>
 				</div>
 				<div class="track audio-track">
-					<div class="waveform-placeholder" style="width: {trackWidth}px">
-						<span class="track-filename">{filename}</span>
-					</div>
+					{#if projectState.waveform}
+						<div class="waveform-container" style="width: {trackWidth}px">
+							<WaveformCanvas
+								peaks={projectState.waveform.peaks}
+								peaksPerSecond={projectState.waveform.peaksPerSecond}
+								{pps}
+								scrollX={uiState.timelineScrollX}
+								viewportWidth={uiState.viewportWidth}
+							/>
+							<span class="track-filename waveform-label">{filename}</span>
+						</div>
+					{:else if projectState.waveformLoading}
+						<div class="waveform-loading" style="width: {trackWidth}px">
+							<span class="track-filename">{filename}</span>
+						</div>
+					{:else}
+						<div class="waveform-placeholder" style="width: {trackWidth}px">
+							<span class="track-filename">{filename}</span>
+						</div>
+					{/if}
 				</div>
 			{:else}
 				<div class="track empty-track"></div>
@@ -238,6 +256,40 @@
 		display: flex;
 		align-items: center;
 		padding: 0 0.5rem;
+	}
+
+	.waveform-container {
+		height: 100%;
+		position: relative;
+		background: var(--bg-secondary);
+		overflow: hidden;
+	}
+
+	.waveform-label {
+		position: absolute;
+		top: 2px;
+		left: 8px;
+		color: var(--text-muted);
+		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+		pointer-events: none;
+	}
+
+	.waveform-loading {
+		height: 100%;
+		background: var(--bg-secondary);
+		display: flex;
+		align-items: center;
+		padding: 0 0.5rem;
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 0.4; }
+		50% { opacity: 0.8; }
+	}
+
+	.waveform-loading .track-filename {
+		color: var(--text-muted);
 	}
 
 	.waveform-placeholder .track-filename {

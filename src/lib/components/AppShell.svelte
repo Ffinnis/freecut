@@ -6,6 +6,13 @@
 	import TransportBar from './TransportBar.svelte';
 	import Timeline from './Timeline.svelte';
 	import StatusBar from './StatusBar.svelte';
+
+	$effect(() => {
+		if (typeof window === 'undefined' || !window.electronAPI?.onWaveformChunk) return;
+		return window.electronAPI.onWaveformChunk((chunk) => {
+			projectState.applyWaveformChunk(chunk);
+		});
+	});
 </script>
 
 <div class="app-shell">

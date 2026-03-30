@@ -36,16 +36,34 @@ MVP target: 2026-04-06 (7-day sprint starting 2026-03-30)
 - [x] Viewport-culled tick rendering for performance at high zoom
 - [x] Zoom-to-center scroll stabilization
 
+- [x] FFmpeg waveform peak extraction (8 kHz mono, 200 peaks/sec, streamed via stdout pipe)
+- [x] Duration extracted from FFmpeg stderr (no ffprobe dependency)
+- [x] Progressive waveform streaming (chunked IPC delivery at 10% intervals)
+- [x] Waveform load lifecycle in project store (begin/chunk/finish/fail with requestId correlation)
+- [x] Canvas-based waveform renderer with mipmap peak levels for LOD
+- [x] Viewport-culled rendering (only draws visible peaks)
+- [x] Retina/DPI-aware canvas scaling
+- [x] requestAnimationFrame throttling for smooth redraws
+- [x] Waveform synced with timeline zoom/scroll system
+- [x] Loading animation (pulse) during extraction
+- [x] Graceful fallback for files with no audio
+
 ### Not yet started
 - [ ] Silence detection engine (FFmpeg silencedetect)
-- [ ] Waveform rendering (wavesurfer.js)
 - [ ] Segment highlighting on timeline
 - [ ] Timeline editing (toggle, drag edges, undo/redo)
 - [ ] Video preview with cut playback
 - [ ] Export: re-encode (MP4, MOV, WAV, MP3)
 - [ ] Export: EDL, FCP XML, AAF generators
 
-## Day 2 — Silence detection + waveform
+## Day 2 — Silence detection + waveform (partial)
+
+### Completed
+- [x] Real audio waveform visualization (replaced wavesurfer.js placeholder with custom canvas renderer)
+- [x] FFmpeg-based peak extraction pipeline (electron → IPC → renderer)
+- [x] Progressive streaming for large files
+- [x] Mipmap-based level-of-detail for zoom performance
+
 ## Day 3 — Timeline editing
 ## Day 4 — Video preview with cut playback
 ## Day 5 — FFmpeg re-encode export
