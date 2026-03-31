@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState } from '$lib/stores/ui.svelte';
 	import {
@@ -175,7 +176,7 @@
 		}
 	});
 
-	// Seeking
+	// Seeking — only re-run on seekRequestId changes, not on activeKey/currentSegIdx swaps
 	$effect(() => {
 		if (!mediaSrc) return;
 		const _id = uiState.seekRequestId;
@@ -184,11 +185,13 @@
 			const editTime = uiState.requestedSeekTime;
 			const sourceTime = editToSource(editTime, editTimeline);
 			const found = findEditSegmentAtTime(editTime, editTimeline);
-			const active = getActive();
+			const active = untrack(() => getActive());
 
 			if (found && active) {
-				currentSegIdx = found.index;
-				standbyReady = false;
+				untrack(() => {
+					currentSegIdx = found.index;
+					standbyReady = false;
+				});
 				if (Math.abs(active.currentTime - sourceTime) > 0.05) {
 					active.currentTime = sourceTime;
 				}
@@ -203,14 +206,14 @@
 		}
 	});
 
-	// Play/pause
+	// Play/pause — only re-run on isPlaying changes, not on activeKey/currentSegIdx swaps
 	$effect(() => {
 		if (!mediaSrc) return;
 
 		if (uiState.isPlaying) {
 			if (uiState.silenceRemoved) {
-				const seg = editTimeline[currentSegIdx];
-				const active = getActive();
+				const seg = untrack(() => editTimeline[currentSegIdx]);
+				const active = untrack(() => getActive());
 				if (!seg || !active) {
 					uiState.setPlaybackState(false);
 					return;
