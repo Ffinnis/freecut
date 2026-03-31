@@ -237,6 +237,15 @@
 								thresholdValue={uiState.silenceRemoved ? 0 : projectState.settings.thresholdValue}
 								height={TRACK_ROW_HEIGHT}
 							/>
+							{#if uiState.silenceRemoved && projectState.editTimeline.length > 1}
+								<div class="waveform-dividers">
+									{#each projectState.editTimeline as clip, i}
+										{#if i > 0}
+											<div class="waveform-divider" style="left: {clip.editStart * pps}px"></div>
+										{/if}
+									{/each}
+								</div>
+							{/if}
 							<span class="track-filename waveform-label">{filename}</span>
 						</div>
 					{:else if projectState.waveformLoading}
@@ -369,6 +378,20 @@
 		width: 1px;
 		background: var(--bg-primary);
 		flex-shrink: 0;
+	}
+
+	.waveform-dividers {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+
+	.waveform-divider {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1px;
+		background: var(--bg-primary);
 	}
 
 	.track-bar {
