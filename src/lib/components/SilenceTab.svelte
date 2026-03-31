@@ -34,10 +34,18 @@
 	<div class="action-row">
 		<button
 			class="remove-btn"
+			class:active-toggle={uiState.silenceRemoved}
 			disabled={!projectState.canDetectSilence}
-			onclick={() => projectState.runSilenceDetection()}
+			onclick={() => {
+				if (projectState.cutCount === 0) {
+					projectState.runSilenceDetection();
+				}
+				if (projectState.cutCount > 0) {
+					uiState.toggleSilenceRemoved();
+				}
+			}}
 		>
-			Remove Silence
+			{uiState.silenceRemoved ? 'Restore Timeline' : 'Remove Silence'}
 		</button>
 		<button class="gear-btn" aria-label="Settings">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -134,6 +142,11 @@
 
 	.remove-btn:hover {
 		opacity: 0.9;
+	}
+
+	.remove-btn.active-toggle {
+		background: var(--accent);
+		color: white;
 	}
 
 	.remove-btn:disabled {
