@@ -9,6 +9,7 @@ class UIState {
 	viewportWidth = $state(1500);
 	showCustomize = $state(false);
 	selectedSegmentId = $state<string | null>(null);
+	silenceRemoved = $state(false);
 
 	get formattedTimecode(): string {
 		const total = Math.floor(this.currentTime);
@@ -45,11 +46,16 @@ class UIState {
 		this.seekRequestId = crypto.randomUUID();
 	}
 
+	toggleSilenceRemoved() {
+		this.silenceRemoved = !this.silenceRemoved;
+	}
+
 	resetPlayback() {
 		this.isPlaying = false;
 		this.currentTime = 0;
 		this.requestedSeekTime = 0;
 		this.seekRequestId = crypto.randomUUID();
+		this.silenceRemoved = false;
 	}
 
 	selectSegment(segmentId: string | null) {

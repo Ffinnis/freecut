@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, type Project, type DetectionSettings } from '$lib/types/project';
+import { buildEditTimeline, getEditDuration, type EditSegment } from '$lib/utils/editTimeline';
 import type { WaveformData, WaveformChunk } from '$lib/types/ipc';
 import { uiState } from './ui.svelte';
 import { detectSilenceSegments } from '$lib/utils/silenceDetection';
@@ -37,6 +38,15 @@ class ProjectState {
 		if (!this.project) return 0;
 		return this.project.segments.filter((s) => s.type === 'silence' && s.action === 'remove')
 			.length;
+	}
+
+	get editTimeline(): EditSegment[] {
+		if (!uiState.silenceRemoved || !this.project) return [];
+		return buildEditTimeline(this.project.segments);
+	}
+
+	get editDuration(): number {
+		return getEditDuration(this.editTimeline);
 	}
 
 	syncProjectSettings() {
