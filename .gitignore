@@ -11,3 +11,4 @@ release/
 *.dmg
 *.snap
 *.AppImage
+.worktrees/
