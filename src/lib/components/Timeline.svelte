@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState, computePps, computeContentWidth, timeToPixel, pixelToTime } from '$lib/stores/ui.svelte';
+	import { buildCollapsedPeaks } from '$lib/utils/editTimeline';
 	import TimeRuler from './TimeRuler.svelte';
 	import WaveformCanvas from './WaveformCanvas.svelte';
 
@@ -11,7 +12,21 @@
 		projectState.project?.sourceFile.split('/').pop() ?? ''
 	);
 
-	let duration = $derived(projectState.totalDuration || 30 * 60);
+	let duration = $derived(
+		uiState.silenceRemoved && projectState.editDuration > 0
+			? projectState.editDuration
+			: (projectState.totalDuration || 30 * 60)
+	);
+
+	let collapsedPeaks = $derived(
+		uiState.silenceRemoved && projectState.waveform
+			? buildCollapsedPeaks(
+					projectState.waveform.peaks,
+					projectState.waveform.peaksPerSecond,
+					projectState.editTimeline
+				)
+			: []
+	);
 
 	let pps = $derived(computePps(uiState.zoomFraction, uiState.viewportWidth, duration));
 	let contentWidth = $derived(computeContentWidth(pps, duration, uiState.viewportWidth));
@@ -87,7 +102,7 @@
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 || !projectState.hasProject) return;
 
-		if (isAudioTrackPointer(event)) {
+		if (!uiState.silenceRemoved && isAudioTrackPointer(event)) {
 			const clickedSegment = projectState.findSegmentAtTime(pointerTime(event));
 			if (clickedSegment) {
 				uiState.selectSegment(clickedSegment.id);
@@ -188,22 +203,38 @@
 
 			{#if projectState.hasProject}
 				<div class="track video-track">
-					<div class="track-bar" style="width: {trackWidth}px">
-						<span class="track-filename">{filename}</span>
-					</div>
+					{#if uiState.silenceRemoved && projectState.editTimeline.length > 0}
+						<div class="clips-row" style="width: {trackWidth}px">
+							{#each projectState.editTimeline as clip, i}
+								<div
+									class="track-clip"
+									style="width: {(clip.editEnd - clip.editStart) * pps}px"
+								>
+									<span class="track-filename">{filename}</span>
+								</div>
+								{#if i < projectState.editTimeline.length - 1}
+									<div class="clip-divider"></div>
+								{/if}
+							{/each}
+						</div>
+					{:else}
+						<div class="track-bar" style="width: {trackWidth}px">
+							<span class="track-filename">{filename}</span>
+						</div>
+					{/if}
 				</div>
 				<div class="track audio-track">
 					{#if projectState.waveform}
 						<div class="waveform-container" style="width: {trackWidth}px">
 							<WaveformCanvas
-								peaks={projectState.waveform.peaks}
+								peaks={uiState.silenceRemoved ? collapsedPeaks : projectState.waveform.peaks}
 								peaksPerSecond={projectState.waveform.peaksPerSecond}
 								{pps}
 								scrollX={uiState.timelineScrollX}
 								viewportWidth={uiState.viewportWidth}
-								segments={projectState.project?.segments ?? []}
-								selectedSegmentId={uiState.selectedSegmentId}
-								thresholdValue={projectState.settings.thresholdValue}
+								segments={uiState.silenceRemoved ? [] : (projectState.project?.segments ?? [])}
+								selectedSegmentId={uiState.silenceRemoved ? null : uiState.selectedSegmentId}
+								thresholdValue={uiState.silenceRemoved ? 0 : projectState.settings.thresholdValue}
 								height={TRACK_ROW_HEIGHT}
 							/>
 							<span class="track-filename waveform-label">{filename}</span>
@@ -315,6 +346,29 @@
 
 	.video-track {
 		background: var(--bg-secondary);
+	}
+
+	.clips-row {
+		display: flex;
+		height: var(--track-row-height);
+		align-items: stretch;
+	}
+
+	.track-clip {
+		height: 100%;
+		background: var(--track-green);
+		opacity: 0.85;
+		display: flex;
+		align-items: center;
+		padding: 0 0.5rem;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.clip-divider {
+		width: 1px;
+		background: var(--bg-primary);
+		flex-shrink: 0;
 	}
 
 	.track-bar {
