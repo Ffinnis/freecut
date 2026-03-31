@@ -203,25 +203,18 @@
 
 			{#if projectState.hasProject}
 				<div class="track video-track">
-					{#if uiState.silenceRemoved && projectState.editTimeline.length > 0}
-						<div class="clips-row" style="width: {trackWidth}px">
-							{#each projectState.editTimeline as clip, i}
-								<div
-									class="track-clip"
-									style="width: {(clip.editEnd - clip.editStart) * pps}px"
-								>
-									<span class="track-filename">{filename}</span>
-								</div>
-								{#if i < projectState.editTimeline.length - 1}
-									<div class="clip-divider"></div>
-								{/if}
-							{/each}
-						</div>
-					{:else}
-						<div class="track-bar" style="width: {trackWidth}px">
-							<span class="track-filename">{filename}</span>
-						</div>
-					{/if}
+					<div class="track-bar" style="width: {trackWidth}px">
+						<span class="track-filename">{filename}</span>
+						{#if uiState.silenceRemoved && projectState.editTimeline.length > 1}
+							<div class="track-dividers">
+								{#each projectState.editTimeline as clip, i}
+									{#if i > 0}
+										<div class="track-divider" style="left: {clip.editStart * pps}px"></div>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+					</div>
 				</div>
 				<div class="track audio-track">
 					{#if projectState.waveform}
@@ -357,27 +350,18 @@
 		background: var(--bg-secondary);
 	}
 
-	.clips-row {
-		display: flex;
-		height: var(--track-row-height);
-		align-items: stretch;
+	.track-dividers {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
 	}
 
-	.track-clip {
-		height: 100%;
-		background: var(--track-green);
-		opacity: 0.85;
-		display: flex;
-		align-items: center;
-		padding: 0 0.5rem;
-		min-width: 0;
-		overflow: hidden;
-	}
-
-	.clip-divider {
+	.track-divider {
+		position: absolute;
+		top: 0;
+		bottom: 0;
 		width: 1px;
 		background: var(--bg-primary);
-		flex-shrink: 0;
 	}
 
 	.waveform-dividers {
@@ -401,6 +385,7 @@
 		display: flex;
 		align-items: center;
 		padding: 0 0.5rem;
+		position: relative;
 	}
 
 	.track-filename {
