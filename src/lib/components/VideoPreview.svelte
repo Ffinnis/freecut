@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState } from '$lib/stores/ui.svelte';
 	import {
@@ -9,9 +8,14 @@
 		getEditDuration
 	} from '$lib/utils/editTimeline';
 
-	let videoEl = $state<HTMLVideoElement | null>(null);
+	let videoA = $state<HTMLVideoElement | null>(null);
+	let videoB = $state<HTMLVideoElement | null>(null);
 	let playbackFrame = 0;
+
+	// Plain variables — NOT $state — so Svelte effects don't re-trigger on swap
+	let activeKey: 'A' | 'B' = 'A';
 	let currentSegIdx = 0;
+	let standbySeekDone = false;
 	let prevSilenceRemoved = false;
 
 	let filename = $derived(projectState.project?.sourceFile.split('/').pop() ?? '');
@@ -23,24 +27,37 @@
 	let editTimeline = $derived(projectState.editTimeline);
 	let editDur = $derived(getEditDuration(editTimeline));
 
+	function getActive(): HTMLVideoElement | null {
+		return activeKey === 'A' ? videoA : videoB;
+	}
+
+	function getStandby(): HTMLVideoElement | null {
+		return activeKey === 'A' ? videoB : videoA;
+	}
+
+	function showVideo(key: 'A' | 'B') {
+		if (videoA) videoA.style.opacity = key === 'A' ? '1' : '0';
+		if (videoB) videoB.style.opacity = key === 'B' ? '1' : '0';
+	}
+
 	// --- Normal mode handlers ---
 
 	function handleLoadedMetadata() {
-		if (!videoEl) return;
-		projectState.setDuration(videoEl.duration || 0);
+		if (!videoA) return;
+		projectState.setDuration(videoA.duration || 0);
 		if (!uiState.silenceRemoved) {
-			uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
+			uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
 		}
 	}
 
 	function handleLoadedData() {
-		if (!videoEl || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
+		if (!videoA || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
 	}
 
 	function handleTimeUpdate() {
-		if (!videoEl || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
+		if (!videoA || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
 	}
 
 	function handlePlay() {
@@ -54,45 +71,64 @@
 
 	function handleEnded() {
 		if (uiState.silenceRemoved) return;
-		if (videoEl) {
-			uiState.setPlaybackTime(videoEl.duration || 0, videoEl.duration || 0);
+		if (videoA) {
+			uiState.setPlaybackTime(videoA.duration || 0, videoA.duration || 0);
 		}
 		uiState.setPlaybackState(false);
+	}
+
+	function handleStandbySeeked() {
+		standbySeekDone = true;
 	}
 
 	// --- Normal mode playback clock ---
 
 	function normalClock() {
-		if (!videoEl || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
+		if (!videoA || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
 		playbackFrame = requestAnimationFrame(normalClock);
 	}
 
 	// --- Collapsed mode playback clock ---
-	// Single video: when it reaches the end of a kept segment, seek to the next one.
 
 	function collapsedClock() {
-		if (!videoEl || !uiState.silenceRemoved || !uiState.isPlaying) return;
+		const active = getActive();
+		if (!active || !uiState.silenceRemoved || !uiState.isPlaying) return;
 
 		const seg = editTimeline[currentSegIdx];
 		if (!seg) {
-			videoEl.pause();
+			active.pause();
 			uiState.setPlaybackTime(editDur, editDur);
 			uiState.setPlaybackState(false);
 			return;
 		}
 
-		const sourceTime = videoEl.currentTime;
+		const sourceTime = active.currentTime;
 		const editTime = sourceToEdit(sourceTime, editTimeline);
 		uiState.setPlaybackTime(editTime, editDur);
 
-		if (sourceTime >= seg.sourceEnd - 0.01) {
-			const nextSeg = editTimeline[currentSegIdx + 1];
-			if (nextSeg) {
+		const nextSeg = editTimeline[currentSegIdx + 1];
+		const standby = getStandby();
+		const timeToEnd = seg.sourceEnd - sourceTime;
+
+		// Pre-seek standby 1s before segment end
+		if (nextSeg && standby && !standbySeekDone && timeToEnd < 1.0) {
+			standby.currentTime = nextSeg.sourceStart;
+			// seeked event will set standbySeekDone = true
+		}
+
+		// Swap at segment boundary
+		if (sourceTime >= seg.sourceEnd - 0.02) {
+			if (nextSeg && standby) {
+				// Swap: show standby frame immediately, then play
+				active.pause();
+				activeKey = activeKey === 'A' ? 'B' : 'A';
+				showVideo(activeKey);
 				currentSegIdx++;
-				videoEl.currentTime = nextSeg.sourceStart;
+				standbySeekDone = false;
+				void standby.play().catch(() => {});
 			} else {
-				videoEl.pause();
+				active.pause();
 				uiState.setPlaybackTime(editDur, editDur);
 				uiState.setPlaybackState(false);
 				return;
@@ -108,14 +144,21 @@
 	$effect(() => {
 		mediaSrc;
 		uiState.resetPlayback();
+		activeKey = 'A';
 		currentSegIdx = 0;
+		standbySeekDone = false;
 		prevSilenceRemoved = false;
 	});
 
-	// Load video
+	// Load videos
 	$effect(() => {
-		if (!videoEl || !mediaSrc) return;
-		videoEl.load();
+		if (!videoA || !mediaSrc) return;
+		videoA.load();
+	});
+
+	$effect(() => {
+		if (!videoB || !mediaSrc) return;
+		videoB.load();
 	});
 
 	// Handle silenceRemoved toggle
@@ -125,77 +168,93 @@
 		prevSilenceRemoved = removed;
 
 		if (uiState.isPlaying) {
-			videoEl?.pause();
+			videoA?.pause();
+			videoB?.pause();
 			uiState.setPlaybackState(false);
 		}
 
 		if (removed) {
-			const sourceTime = videoEl?.currentTime ?? 0;
+			activeKey = 'A';
+			standbySeekDone = false;
+			showVideo('A');
+			const sourceTime = videoA?.currentTime ?? 0;
 			const editTime = sourceToEdit(sourceTime, editTimeline);
 			const found = findEditSegmentAtTime(editTime, editTimeline);
 			currentSegIdx = found?.index ?? 0;
 			uiState.setPlaybackTime(editTime, editDur);
 		} else {
-			const sourceTime = videoEl?.currentTime ?? 0;
-			uiState.setPlaybackTime(sourceTime, videoEl?.duration ?? 0);
+			videoB?.pause();
+			activeKey = 'A';
+			standbySeekDone = false;
+			showVideo('A');
+			const sourceTime = videoA?.currentTime ?? 0;
+			uiState.setPlaybackTime(sourceTime, videoA?.duration ?? 0);
 		}
 	});
 
 	// Seeking
 	$effect(() => {
-		if (!videoEl || !mediaSrc) return;
+		if (!mediaSrc) return;
 		const _id = uiState.seekRequestId;
 
 		if (uiState.silenceRemoved) {
 			const editTime = uiState.requestedSeekTime;
 			const sourceTime = editToSource(editTime, editTimeline);
 			const found = findEditSegmentAtTime(editTime, editTimeline);
+			const active = getActive();
 
-			if (found) {
+			if (found && active) {
 				currentSegIdx = found.index;
-				if (Math.abs(videoEl.currentTime - sourceTime) > 0.05) {
-					videoEl.currentTime = sourceTime;
+				standbySeekDone = false;
+				if (Math.abs(active.currentTime - sourceTime) > 0.05) {
+					active.currentTime = sourceTime;
 				}
 			}
 		} else {
-			const duration = videoEl.duration || projectState.totalDuration || 0;
+			if (!videoA) return;
+			const duration = videoA.duration || projectState.totalDuration || 0;
 			const target = Math.min(uiState.requestedSeekTime, duration || uiState.requestedSeekTime);
-			if (Math.abs(videoEl.currentTime - target) > 0.05) {
-				videoEl.currentTime = target;
+			if (Math.abs(videoA.currentTime - target) > 0.05) {
+				videoA.currentTime = target;
 			}
 		}
 	});
 
 	// Play/pause
 	$effect(() => {
-		if (!videoEl || !mediaSrc) return;
+		if (!mediaSrc) return;
 
 		if (uiState.isPlaying) {
+			const active = getActive();
 			if (uiState.silenceRemoved) {
 				const seg = editTimeline[currentSegIdx];
-				if (!seg) {
+				if (!seg || !active) {
 					uiState.setPlaybackState(false);
 					return;
 				}
-				if (videoEl.currentTime < seg.sourceStart || videoEl.currentTime >= seg.sourceEnd) {
-					videoEl.currentTime = seg.sourceStart;
+				if (active.currentTime < seg.sourceStart || active.currentTime >= seg.sourceEnd) {
+					active.currentTime = seg.sourceStart;
 				}
+				void active.play().catch(() => uiState.setPlaybackState(false));
+			} else {
+				if (!videoA) return;
+				void videoA.play().catch(() => uiState.setPlaybackState(false));
 			}
-			void videoEl.play().catch(() => uiState.setPlaybackState(false));
 			return;
 		}
 
-		videoEl.pause();
+		videoA?.pause();
+		videoB?.pause();
 	});
 
 	// Playback clock
 	$effect(() => {
 		if (!mediaSrc || !uiState.isPlaying) return;
-		if (!videoEl) return;
 
 		if (uiState.silenceRemoved) {
 			playbackFrame = requestAnimationFrame(collapsedClock);
 		} else {
+			if (!videoA) return;
 			playbackFrame = requestAnimationFrame(normalClock);
 		}
 
@@ -213,7 +272,7 @@
 		{#if mediaSrc}
 			<!-- svelte-ignore a11y_media_has_caption -->
 			<video
-				bind:this={videoEl}
+				bind:this={videoA}
 				class="video-player"
 				src={mediaSrc}
 				preload="auto"
@@ -225,6 +284,16 @@
 				onplay={handlePlay}
 				onpause={handlePause}
 				onended={handleEnded}
+			></video>
+			<!-- svelte-ignore a11y_media_has_caption -->
+			<video
+				bind:this={videoB}
+				class="video-player video-b"
+				src={mediaSrc}
+				preload="auto"
+				playsinline
+				aria-label="Video preview standby"
+				onseeked={handleStandbySeeked}
 			></video>
 			<div class="video-overlay">
 				<p class="filename">{filename}</p>
@@ -269,6 +338,11 @@
 		height: 100%;
 		object-fit: contain;
 		background: #000;
+		transition: opacity 0s;
+	}
+
+	.video-b {
+		opacity: 0;
 	}
 
 	.video-overlay {
