@@ -12,10 +12,10 @@
 	let videoB = $state<HTMLVideoElement | null>(null);
 	let playbackFrame = 0;
 
-	// Plain variables — NOT $state — so Svelte effects don't re-trigger on swap
-	let activeKey: 'A' | 'B' = 'A';
-	let currentSegIdx = 0;
-	let standbySeekDone = false;
+	// Plain variables for collapsed mode — completely outside Svelte reactivity
+	let activeIs: 'A' | 'B' = 'A';
+	let segIdx = 0;
+	let pendingSeek: number | null = null; // edit-time to seek to, set by effect, consumed by clock
 	let prevSilenceRemoved = false;
 
 	let filename = $derived(projectState.project?.sourceFile.split('/').pop() ?? '');
@@ -24,23 +24,17 @@
 			? `freecut-media://preview?path=${encodeURIComponent(projectState.project.sourceFile)}`
 			: ''
 	);
-	let editTimeline = $derived(projectState.editTimeline);
-	let editDur = $derived(getEditDuration(editTimeline));
 
-	function getActive(): HTMLVideoElement | null {
-		return activeKey === 'A' ? videoA : videoB;
+	function vid(key: 'A' | 'B') {
+		return key === 'A' ? videoA : videoB;
 	}
 
-	function getStandby(): HTMLVideoElement | null {
-		return activeKey === 'A' ? videoB : videoA;
-	}
-
-	function showVideo(key: 'A' | 'B') {
+	function setVisible(key: 'A' | 'B') {
 		if (videoA) videoA.style.opacity = key === 'A' ? '1' : '0';
 		if (videoB) videoB.style.opacity = key === 'B' ? '1' : '0';
 	}
 
-	// --- Normal mode handlers ---
+	// --- Normal mode handlers (only fire when silenceRemoved is OFF) ---
 
 	function handleLoadedMetadata() {
 		if (!videoA) return;
@@ -61,27 +55,20 @@
 	}
 
 	function handlePlay() {
-		uiState.setPlaybackState(true);
+		if (!uiState.silenceRemoved) uiState.setPlaybackState(true);
 	}
 
 	function handlePause() {
-		if (uiState.silenceRemoved) return;
-		uiState.setPlaybackState(false);
+		if (!uiState.silenceRemoved) uiState.setPlaybackState(false);
 	}
 
 	function handleEnded() {
 		if (uiState.silenceRemoved) return;
-		if (videoA) {
-			uiState.setPlaybackTime(videoA.duration || 0, videoA.duration || 0);
-		}
+		if (videoA) uiState.setPlaybackTime(videoA.duration || 0, videoA.duration || 0);
 		uiState.setPlaybackState(false);
 	}
 
-	function handleStandbySeeked() {
-		standbySeekDone = true;
-	}
-
-	// --- Normal mode playback clock ---
+	// --- Normal mode clock ---
 
 	function normalClock() {
 		if (!videoA || uiState.silenceRemoved) return;
@@ -89,47 +76,65 @@
 		playbackFrame = requestAnimationFrame(normalClock);
 	}
 
-	// --- Collapsed mode playback clock ---
+	// --- Collapsed mode clock (handles ALL collapsed logic) ---
 
 	function collapsedClock() {
-		const active = getActive();
+		const tl = projectState.editTimeline;
+		const dur = getEditDuration(tl);
+		const active = vid(activeIs);
 		if (!active || !uiState.silenceRemoved || !uiState.isPlaying) return;
 
-		const seg = editTimeline[currentSegIdx];
+		// Handle pending seek from user click
+		if (pendingSeek !== null) {
+			const editTime = pendingSeek;
+			pendingSeek = null;
+			const sourceTime = editToSource(editTime, tl);
+			const found = findEditSegmentAtTime(editTime, tl);
+			if (found) {
+				segIdx = found.index;
+				const a = vid(activeIs);
+				if (a) {
+					a.currentTime = sourceTime;
+				}
+			}
+		}
+
+		const seg = tl[segIdx];
 		if (!seg) {
 			active.pause();
-			uiState.setPlaybackTime(editDur, editDur);
+			uiState.setPlaybackTime(dur, dur);
 			uiState.setPlaybackState(false);
 			return;
 		}
 
 		const sourceTime = active.currentTime;
-		const editTime = sourceToEdit(sourceTime, editTimeline);
-		uiState.setPlaybackTime(editTime, editDur);
+		const editTime = sourceToEdit(sourceTime, tl);
+		uiState.setPlaybackTime(editTime, dur);
 
-		const nextSeg = editTimeline[currentSegIdx + 1];
-		const standby = getStandby();
+		// Pre-seek standby
+		const standbyKey: 'A' | 'B' = activeIs === 'A' ? 'B' : 'A';
+		const standby = vid(standbyKey);
+		const nextSeg = tl[segIdx + 1];
 		const timeToEnd = seg.sourceEnd - sourceTime;
 
-		// Pre-seek standby 1s before segment end
-		if (nextSeg && standby && !standbySeekDone && timeToEnd < 1.0) {
-			standby.currentTime = nextSeg.sourceStart;
-			// seeked event will set standbySeekDone = true
+		if (nextSeg && standby && timeToEnd < 1.0 && timeToEnd > 0.02) {
+			const diff = Math.abs(standby.currentTime - nextSeg.sourceStart);
+			if (diff > 0.1) {
+				standby.currentTime = nextSeg.sourceStart;
+			}
 		}
 
 		// Swap at segment boundary
 		if (sourceTime >= seg.sourceEnd - 0.02) {
 			if (nextSeg && standby) {
-				// Swap: show standby frame immediately, then play
 				active.pause();
-				activeKey = activeKey === 'A' ? 'B' : 'A';
-				showVideo(activeKey);
-				currentSegIdx++;
-				standbySeekDone = false;
+				activeIs = standbyKey;
+				setVisible(activeIs);
+				segIdx++;
 				void standby.play().catch(() => {});
 			} else {
 				active.pause();
-				uiState.setPlaybackTime(editDur, editDur);
+				uiState.setPlaybackTime(dur, dur);
 				uiState.setPlaybackState(false);
 				return;
 			}
@@ -138,27 +143,26 @@
 		playbackFrame = requestAnimationFrame(collapsedClock);
 	}
 
-	// --- Effects ---
+	// ========================================
+	// Effects — completely separated by mode
+	// ========================================
 
 	// Reset on source change
 	$effect(() => {
 		mediaSrc;
 		uiState.resetPlayback();
-		activeKey = 'A';
-		currentSegIdx = 0;
-		standbySeekDone = false;
+		activeIs = 'A';
+		segIdx = 0;
+		pendingSeek = null;
 		prevSilenceRemoved = false;
 	});
 
 	// Load videos
 	$effect(() => {
-		if (!videoA || !mediaSrc) return;
-		videoA.load();
+		if (videoA && mediaSrc) videoA.load();
 	});
-
 	$effect(() => {
-		if (!videoB || !mediaSrc) return;
-		videoB.load();
+		if (videoB && mediaSrc) videoB.load();
 	});
 
 	// Handle silenceRemoved toggle
@@ -167,84 +171,92 @@
 		if (removed === prevSilenceRemoved) return;
 		prevSilenceRemoved = removed;
 
-		if (uiState.isPlaying) {
-			videoA?.pause();
-			videoB?.pause();
-			uiState.setPlaybackState(false);
-		}
+		videoA?.pause();
+		videoB?.pause();
+		uiState.setPlaybackState(false);
+
+		activeIs = 'A';
+		segIdx = 0;
+		pendingSeek = null;
+		setVisible('A');
 
 		if (removed) {
-			activeKey = 'A';
-			standbySeekDone = false;
-			showVideo('A');
+			const tl = projectState.editTimeline;
 			const sourceTime = videoA?.currentTime ?? 0;
-			const editTime = sourceToEdit(sourceTime, editTimeline);
-			const found = findEditSegmentAtTime(editTime, editTimeline);
-			currentSegIdx = found?.index ?? 0;
-			uiState.setPlaybackTime(editTime, editDur);
+			const editTime = sourceToEdit(sourceTime, tl);
+			const found = findEditSegmentAtTime(editTime, tl);
+			segIdx = found?.index ?? 0;
+			uiState.setPlaybackTime(editTime, getEditDuration(tl));
 		} else {
-			videoB?.pause();
-			activeKey = 'A';
-			standbySeekDone = false;
-			showVideo('A');
 			const sourceTime = videoA?.currentTime ?? 0;
 			uiState.setPlaybackTime(sourceTime, videoA?.duration ?? 0);
 		}
 	});
 
-	// Seeking
+	// --- NORMAL MODE: seeking ---
 	$effect(() => {
-		if (!mediaSrc) return;
+		if (!mediaSrc || !videoA || uiState.silenceRemoved) return;
 		const _id = uiState.seekRequestId;
-
-		if (uiState.silenceRemoved) {
-			const editTime = uiState.requestedSeekTime;
-			const sourceTime = editToSource(editTime, editTimeline);
-			const found = findEditSegmentAtTime(editTime, editTimeline);
-			const active = getActive();
-
-			if (found && active) {
-				currentSegIdx = found.index;
-				standbySeekDone = false;
-				if (Math.abs(active.currentTime - sourceTime) > 0.05) {
-					active.currentTime = sourceTime;
-				}
-			}
-		} else {
-			if (!videoA) return;
-			const duration = videoA.duration || projectState.totalDuration || 0;
-			const target = Math.min(uiState.requestedSeekTime, duration || uiState.requestedSeekTime);
-			if (Math.abs(videoA.currentTime - target) > 0.05) {
-				videoA.currentTime = target;
-			}
+		const duration = videoA.duration || projectState.totalDuration || 0;
+		const target = Math.min(uiState.requestedSeekTime, duration || uiState.requestedSeekTime);
+		if (Math.abs(videoA.currentTime - target) > 0.05) {
+			videoA.currentTime = target;
 		}
 	});
 
-	// Play/pause
+	// --- COLLAPSED MODE: seeking (just sets pendingSeek for the clock to consume) ---
 	$effect(() => {
-		if (!mediaSrc) return;
-
-		if (uiState.isPlaying) {
-			const active = getActive();
-			if (uiState.silenceRemoved) {
-				const seg = editTimeline[currentSegIdx];
-				if (!seg || !active) {
-					uiState.setPlaybackState(false);
-					return;
+		if (!mediaSrc || !uiState.silenceRemoved) return;
+		const _id = uiState.seekRequestId;
+		pendingSeek = uiState.requestedSeekTime;
+		// If not playing, apply immediately
+		if (!uiState.isPlaying) {
+			const tl = projectState.editTimeline;
+			const sourceTime = editToSource(uiState.requestedSeekTime, tl);
+			const found = findEditSegmentAtTime(uiState.requestedSeekTime, tl);
+			if (found) {
+				segIdx = found.index;
+				const a = vid(activeIs);
+				if (a && Math.abs(a.currentTime - sourceTime) > 0.05) {
+					a.currentTime = sourceTime;
 				}
-				if (active.currentTime < seg.sourceStart || active.currentTime >= seg.sourceEnd) {
-					active.currentTime = seg.sourceStart;
-				}
-				void active.play().catch(() => uiState.setPlaybackState(false));
-			} else {
-				if (!videoA) return;
-				void videoA.play().catch(() => uiState.setPlaybackState(false));
 			}
-			return;
+			const editTime = uiState.requestedSeekTime;
+			uiState.setPlaybackTime(editTime, getEditDuration(tl));
+			pendingSeek = null;
 		}
+	});
 
-		videoA?.pause();
-		videoB?.pause();
+	// --- NORMAL MODE: play/pause ---
+	$effect(() => {
+		if (!mediaSrc || !videoA || uiState.silenceRemoved) return;
+		if (uiState.isPlaying) {
+			void videoA.play().catch(() => uiState.setPlaybackState(false));
+		} else {
+			videoA.pause();
+		}
+	});
+
+	// --- COLLAPSED MODE: play/pause ---
+	$effect(() => {
+		if (!mediaSrc || !uiState.silenceRemoved) return;
+		if (uiState.isPlaying) {
+			// Start playback: ensure active is at the right position, then play
+			const tl = projectState.editTimeline;
+			const seg = tl[segIdx];
+			const active = vid(activeIs);
+			if (!seg || !active) {
+				uiState.setPlaybackState(false);
+				return;
+			}
+			if (active.currentTime < seg.sourceStart || active.currentTime >= seg.sourceEnd) {
+				active.currentTime = seg.sourceStart;
+			}
+			void active.play().catch(() => uiState.setPlaybackState(false));
+		} else {
+			videoA?.pause();
+			videoB?.pause();
+		}
 	});
 
 	// Playback clock
@@ -293,7 +305,6 @@
 				preload="auto"
 				playsinline
 				aria-label="Video preview standby"
-				onseeked={handleStandbySeeked}
 			></video>
 			<div class="video-overlay">
 				<p class="filename">{filename}</p>
@@ -338,7 +349,6 @@
 		height: 100%;
 		object-fit: contain;
 		background: #000;
-		transition: opacity 0s;
 	}
 
 	.video-b {
