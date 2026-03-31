@@ -111,27 +111,31 @@
 		const editTime = sourceToEdit(sourceTime, tl);
 		uiState.setPlaybackTime(editTime, dur);
 
-		// Pre-seek standby
+		// Pre-seek standby 1s before end
 		const standbyKey: 'A' | 'B' = activeIs === 'A' ? 'B' : 'A';
 		const standby = vid(standbyKey);
 		const nextSeg = tl[segIdx + 1];
 		const timeToEnd = seg.sourceEnd - sourceTime;
 
-		if (nextSeg && standby && timeToEnd < 1.0 && timeToEnd > 0.02) {
+		if (nextSeg && standby && timeToEnd < 1.0 && timeToEnd > 0.15) {
 			const diff = Math.abs(standby.currentTime - nextSeg.sourceStart);
 			if (diff > 0.1) {
 				standby.currentTime = nextSeg.sourceStart;
 			}
 		}
 
-		// Swap at segment boundary
+		// Pre-play standby 150ms before end (so it's already producing frames at swap)
+		if (nextSeg && standby && standby.paused && timeToEnd < 0.15 && timeToEnd > 0.02) {
+			void standby.play().catch(() => {});
+		}
+
+		// Swap at segment boundary — standby is already playing
 		if (sourceTime >= seg.sourceEnd - 0.02) {
 			if (nextSeg && standby) {
 				active.pause();
 				activeIs = standbyKey;
 				setVisible(activeIs);
 				segIdx++;
-				void standby.play().catch(() => {});
 			} else {
 				active.pause();
 				uiState.setPlaybackTime(dur, dur);
