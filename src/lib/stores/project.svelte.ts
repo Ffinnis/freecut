@@ -194,7 +194,7 @@ class ProjectState {
 		return this.project.segments.find((segment) => segment.id === segmentId) ?? null;
 	}
 
-	findSilenceSegmentAtTime(time: number): Segment | null {
+	findSegmentAtTime(time: number): Segment | null {
 		if (!this.project || this.project.segments.length === 0) return null;
 
 		let left = 0;
@@ -214,20 +214,19 @@ class ProjectState {
 				continue;
 			}
 
-			return segment.type === 'silence' ? segment : null;
+			return segment;
 		}
 
 		return null;
 	}
 
-	toggleSilenceSegmentAction(segmentId: string | null) {
+	toggleSegmentAction(segmentId: string | null) {
 		if (!segmentId || !this.project) return false;
 
 		const segmentIndex = this.project.segments.findIndex((segment) => segment.id === segmentId);
 		if (segmentIndex === -1) return false;
 
 		const segment = this.project.segments[segmentIndex];
-		if (segment.type !== 'silence') return false;
 
 		const nextAction = segment.action === 'remove' ? 'keep' : 'remove';
 		const nextSegments = this.project.segments.slice();

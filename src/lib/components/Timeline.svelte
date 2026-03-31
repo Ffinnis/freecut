@@ -88,7 +88,7 @@
 		if (event.button !== 0 || !projectState.hasProject) return;
 
 		if (isAudioTrackPointer(event)) {
-			const clickedSegment = projectState.findSilenceSegmentAtTime(pointerTime(event));
+			const clickedSegment = projectState.findSegmentAtTime(pointerTime(event));
 			if (clickedSegment) {
 				uiState.selectSegment(clickedSegment.id);
 				event.preventDefault();
@@ -320,7 +320,7 @@
 	.track-bar {
 		height: var(--track-row-height);
 		background: var(--track-green);
-		opacity: 0.7;
+		opacity: 0.85;
 		display: flex;
 		align-items: center;
 		padding: 0 0.5rem;
@@ -328,7 +328,7 @@
 
 	.track-filename {
 		font-size: 0.625rem;
-		color: var(--bg-primary);
+		color: rgba(255, 255, 255, 0.7);
 		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;

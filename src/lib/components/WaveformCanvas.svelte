@@ -102,7 +102,7 @@
 		ctx.stroke();
 	}
 
-	function drawSilenceSegments(
+	function drawSegments(
 		ctx: CanvasRenderingContext2D,
 		width: number,
 		height: number,
@@ -110,7 +110,6 @@
 		endTime: number
 	) {
 		for (const segment of segments) {
-			if (segment.type !== 'silence') continue;
 			if (segment.end < startTime) continue;
 			if (segment.start > endTime) break;
 
@@ -119,14 +118,30 @@
 			const segmentWidth = Math.max(1, endX - startX);
 			const isSelected = segment.id === selectedSegmentId;
 
-			if (segment.action === 'remove') {
-				ctx.fillStyle = isSelected ? 'rgba(233, 69, 96, 0.46)' : 'rgba(233, 69, 96, 0.32)';
+			if (segment.type === 'silence' && segment.action === 'remove') {
+				ctx.fillStyle = isSelected ? 'rgba(155, 55, 70, 0.52)' : 'rgba(155, 55, 70, 0.38)';
 				ctx.fillRect(startX, 0, segmentWidth, height);
 			}
 
-			if (segment.action === 'keep' || isSelected) {
-				ctx.strokeStyle = isSelected ? 'rgba(255, 255, 255, 0.92)' : 'rgba(255, 255, 255, 0.65)';
-				ctx.lineWidth = isSelected ? 1.5 : 1;
+			if (segment.type === 'speech' && segment.action === 'remove') {
+				ctx.fillStyle = isSelected ? 'rgba(155, 55, 70, 0.52)' : 'rgba(155, 55, 70, 0.38)';
+				ctx.fillRect(startX, 0, segmentWidth, height);
+			}
+
+			if (isSelected) {
+				ctx.fillStyle = 'rgba(163, 196, 230, 0.12)';
+				ctx.fillRect(startX, 0, segmentWidth, height);
+				ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+				ctx.lineWidth = 1.5;
+				ctx.strokeRect(
+					startX + 0.5,
+					0.5,
+					Math.max(0, segmentWidth - 1),
+					Math.max(0, height - 1)
+				);
+			} else if (segment.type === 'silence' && segment.action === 'keep') {
+				ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+				ctx.lineWidth = 1;
 				ctx.strokeRect(
 					startX + 0.5,
 					0.5,
@@ -162,7 +177,7 @@
 		const centerY = h / 2;
 
 		drawThresholdBand(ctx, w, centerY);
-		drawSilenceSegments(ctx, w, h, startTime, endTime);
+		drawSegments(ctx, w, h, startTime, endTime);
 
 		if (peakLevels.length === 0) return;
 
@@ -174,7 +189,7 @@
 
 		const pixelsPerPeak = pps / peaksPerSecond;
 
-		ctx.fillStyle = 'rgba(74, 222, 128, 0.65)';
+		ctx.fillStyle = 'rgba(163, 196, 230, 0.7)';
 
 		if (pixelsPerPeak >= 1) {
 			const barWidth = Math.max(1, pixelsPerPeak - 0.5);

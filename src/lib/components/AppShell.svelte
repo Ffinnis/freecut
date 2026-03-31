@@ -53,7 +53,7 @@
 			}
 
 			if (isDeleteKey(event) && uiState.selectedSegmentId) {
-				if (projectState.toggleSilenceSegmentAction(uiState.selectedSegmentId)) {
+				if (projectState.toggleSegmentAction(uiState.selectedSegmentId)) {
 					event.preventDefault();
 					event.stopPropagation();
 				}

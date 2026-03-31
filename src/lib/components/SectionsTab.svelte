@@ -25,7 +25,7 @@
 				<button
 					class="segment-row"
 					class:selected={uiState.selectedSegmentId === segment.id}
-					onclick={() => selectSegment(segment.type === 'silence' ? segment.id : null, segment.start)}
+					onclick={() => selectSegment(segment.id, segment.start)}
 				>
 					<span class="type-badge" class:silence={segment.type === 'silence'} class:speech={segment.type === 'speech'}>
 						{segment.type === 'silence' ? 'S' : 'V'}
@@ -95,7 +95,7 @@
 
 	.type-badge.speech {
 		background: var(--speech);
-		color: var(--success);
+		color: rgba(163, 196, 230, 0.85);
 	}
 
 	.type-badge.silence {

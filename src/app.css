@@ -1,10 +1,10 @@
 :root {
-	--bg-primary: #1e1e1e;
-	--bg-secondary: #252525;
-	--bg-surface: #2d2d2d;
-	--bg-elevated: #383838;
-	--bg-transport: #303030;
-	--bg-input: #1a1a1a;
+	--bg-primary: #1e2028;
+	--bg-secondary: #252830;
+	--bg-surface: #2d3038;
+	--bg-elevated: #383b44;
+	--bg-transport: #2e3038;
+	--bg-input: #1a1c22;
 
 	--text-primary: #e0e0e0;
 	--text-secondary: #999999;
@@ -19,9 +19,9 @@
 
 	--success: #4ade80;
 	--warning: #fbbf24;
-	--silence: rgba(233, 69, 96, 0.3);
-	--speech: rgba(74, 222, 128, 0.2);
-	--track-green: #4ade80;
+	--silence: rgba(155, 55, 70, 0.3);
+	--speech: rgba(163, 196, 230, 0.2);
+	--track-green: #3d6b4f;
 
 	--radius-sm: 4px;
 	--radius-md: 8px;
