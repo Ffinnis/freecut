@@ -17,7 +17,14 @@
 				<span class="badge">{projectState.cutCount}</span>
 			{/if}
 		</button>
-		<button class="transport-btn" aria-label="Cut">
+		<button
+			class="transport-btn"
+			class:active-toggle={uiState.silenceRemoved}
+			aria-label={uiState.silenceRemoved ? 'Show original timeline' : 'Remove silence'}
+			aria-pressed={uiState.silenceRemoved}
+			disabled={projectState.cutCount === 0}
+			onclick={() => uiState.toggleSilenceRemoved()}
+		>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<circle cx="6" cy="6" r="3" />
 				<path d="M8.12 8.12L12 12" />
@@ -117,6 +124,16 @@
 	.transport-btn:disabled:hover {
 		background: none;
 		color: var(--text-secondary);
+	}
+
+	.active-toggle {
+		background: var(--accent-muted);
+		color: var(--accent);
+	}
+
+	.active-toggle:hover {
+		background: var(--accent);
+		color: white;
 	}
 
 	.segments-btn {
