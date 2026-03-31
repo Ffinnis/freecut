@@ -9,13 +9,9 @@
 		getEditDuration
 	} from '$lib/utils/editTimeline';
 
-	let videoA = $state<HTMLVideoElement | null>(null);
-	let videoB = $state<HTMLVideoElement | null>(null);
+	let videoEl = $state<HTMLVideoElement | null>(null);
 	let playbackFrame = 0;
-
-	let activeKey = $state<'A' | 'B'>('A');
-	let currentSegIdx = $state(0);
-	let standbyReady = $state(false);
+	let currentSegIdx = 0;
 	let prevSilenceRemoved = false;
 
 	let filename = $derived(projectState.project?.sourceFile.split('/').pop() ?? '');
@@ -27,32 +23,24 @@
 	let editTimeline = $derived(projectState.editTimeline);
 	let editDur = $derived(getEditDuration(editTimeline));
 
-	function getActive() {
-		return activeKey === 'A' ? videoA : videoB;
-	}
-
-	function getStandby() {
-		return activeKey === 'A' ? videoB : videoA;
-	}
-
 	// --- Normal mode handlers ---
 
 	function handleLoadedMetadata() {
-		if (!videoA) return;
-		projectState.setDuration(videoA.duration || 0);
+		if (!videoEl) return;
+		projectState.setDuration(videoEl.duration || 0);
 		if (!uiState.silenceRemoved) {
-			uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
+			uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
 		}
 	}
 
 	function handleLoadedData() {
-		if (!videoA || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
+		if (!videoEl || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
 	}
 
 	function handleTimeUpdate() {
-		if (!videoA || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
+		if (!videoEl || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
 	}
 
 	function handlePlay() {
@@ -66,8 +54,8 @@
 
 	function handleEnded() {
 		if (uiState.silenceRemoved) return;
-		if (videoA) {
-			uiState.setPlaybackTime(videoA.duration || 0, videoA.duration || 0);
+		if (videoEl) {
+			uiState.setPlaybackTime(videoEl.duration || 0, videoEl.duration || 0);
 		}
 		uiState.setPlaybackState(false);
 	}
@@ -75,46 +63,36 @@
 	// --- Normal mode playback clock ---
 
 	function normalClock() {
-		if (!videoA || uiState.silenceRemoved) return;
-		uiState.setPlaybackTime(videoA.currentTime, videoA.duration || 0);
+		if (!videoEl || uiState.silenceRemoved) return;
+		uiState.setPlaybackTime(videoEl.currentTime, videoEl.duration || 0);
 		playbackFrame = requestAnimationFrame(normalClock);
 	}
 
 	// --- Collapsed mode playback clock ---
+	// Single video: when it reaches the end of a kept segment, seek to the next one.
 
 	function collapsedClock() {
-		const active = getActive();
-		const standby = getStandby();
-		if (!active || !uiState.silenceRemoved || !uiState.isPlaying) return;
+		if (!videoEl || !uiState.silenceRemoved || !uiState.isPlaying) return;
 
 		const seg = editTimeline[currentSegIdx];
 		if (!seg) {
-			active.pause();
+			videoEl.pause();
+			uiState.setPlaybackTime(editDur, editDur);
 			uiState.setPlaybackState(false);
 			return;
 		}
 
-		const sourceTime = active.currentTime;
+		const sourceTime = videoEl.currentTime;
 		const editTime = sourceToEdit(sourceTime, editTimeline);
 		uiState.setPlaybackTime(editTime, editDur);
 
-		const timeToEnd = seg.sourceEnd - sourceTime;
-		const nextSeg = editTimeline[currentSegIdx + 1];
-
-		if (nextSeg && timeToEnd < 0.2 && !standbyReady && standby) {
-			standby.currentTime = nextSeg.sourceStart;
-			standbyReady = true;
-		}
-
-		if (sourceTime >= seg.sourceEnd - 0.016) {
-			if (nextSeg && standby) {
-				void standby.play().catch(() => {});
-				active.pause();
-				activeKey = activeKey === 'A' ? 'B' : 'A';
+		if (sourceTime >= seg.sourceEnd - 0.01) {
+			const nextSeg = editTimeline[currentSegIdx + 1];
+			if (nextSeg) {
 				currentSegIdx++;
-				standbyReady = false;
+				videoEl.currentTime = nextSeg.sourceStart;
 			} else {
-				active.pause();
+				videoEl.pause();
 				uiState.setPlaybackTime(editDur, editDur);
 				uiState.setPlaybackState(false);
 				return;
@@ -130,21 +108,14 @@
 	$effect(() => {
 		mediaSrc;
 		uiState.resetPlayback();
-		activeKey = 'A';
 		currentSegIdx = 0;
-		standbyReady = false;
 		prevSilenceRemoved = false;
 	});
 
-	// Load videos
+	// Load video
 	$effect(() => {
-		if (!videoA || !mediaSrc) return;
-		videoA.load();
-	});
-
-	$effect(() => {
-		if (!videoB || !mediaSrc) return;
-		videoB.load();
+		if (!videoEl || !mediaSrc) return;
+		videoEl.load();
 	});
 
 	// Handle silenceRemoved toggle
@@ -154,93 +125,77 @@
 		prevSilenceRemoved = removed;
 
 		if (uiState.isPlaying) {
-			videoA?.pause();
-			videoB?.pause();
+			videoEl?.pause();
 			uiState.setPlaybackState(false);
 		}
 
 		if (removed) {
-			activeKey = 'A';
-			standbyReady = false;
-			const sourceTime = videoA?.currentTime ?? 0;
+			const sourceTime = videoEl?.currentTime ?? 0;
 			const editTime = sourceToEdit(sourceTime, editTimeline);
 			const found = findEditSegmentAtTime(editTime, editTimeline);
 			currentSegIdx = found?.index ?? 0;
 			uiState.setPlaybackTime(editTime, editDur);
 		} else {
-			videoB?.pause();
-			activeKey = 'A';
-			standbyReady = false;
-			const sourceTime = videoA?.currentTime ?? 0;
-			uiState.setPlaybackTime(sourceTime, videoA?.duration ?? 0);
+			const sourceTime = videoEl?.currentTime ?? 0;
+			uiState.setPlaybackTime(sourceTime, videoEl?.duration ?? 0);
 		}
 	});
 
-	// Seeking — only re-run on seekRequestId changes, not on activeKey/currentSegIdx swaps
+	// Seeking
 	$effect(() => {
-		if (!mediaSrc) return;
+		if (!videoEl || !mediaSrc) return;
 		const _id = uiState.seekRequestId;
 
 		if (uiState.silenceRemoved) {
 			const editTime = uiState.requestedSeekTime;
 			const sourceTime = editToSource(editTime, editTimeline);
 			const found = findEditSegmentAtTime(editTime, editTimeline);
-			const active = untrack(() => getActive());
 
-			if (found && active) {
-				untrack(() => {
-					currentSegIdx = found.index;
-					standbyReady = false;
-				});
-				if (Math.abs(active.currentTime - sourceTime) > 0.05) {
-					active.currentTime = sourceTime;
+			if (found) {
+				currentSegIdx = found.index;
+				if (Math.abs(videoEl.currentTime - sourceTime) > 0.05) {
+					videoEl.currentTime = sourceTime;
 				}
 			}
 		} else {
-			if (!videoA) return;
-			const duration = videoA.duration || projectState.totalDuration || 0;
+			const duration = videoEl.duration || projectState.totalDuration || 0;
 			const target = Math.min(uiState.requestedSeekTime, duration || uiState.requestedSeekTime);
-			if (Math.abs(videoA.currentTime - target) > 0.05) {
-				videoA.currentTime = target;
+			if (Math.abs(videoEl.currentTime - target) > 0.05) {
+				videoEl.currentTime = target;
 			}
 		}
 	});
 
-	// Play/pause — only re-run on isPlaying changes, not on activeKey/currentSegIdx swaps
+	// Play/pause
 	$effect(() => {
-		if (!mediaSrc) return;
+		if (!videoEl || !mediaSrc) return;
 
 		if (uiState.isPlaying) {
 			if (uiState.silenceRemoved) {
-				const seg = untrack(() => editTimeline[currentSegIdx]);
-				const active = untrack(() => getActive());
-				if (!seg || !active) {
+				const seg = editTimeline[currentSegIdx];
+				if (!seg) {
 					uiState.setPlaybackState(false);
 					return;
 				}
-				if (active.currentTime < seg.sourceStart || active.currentTime >= seg.sourceEnd) {
-					active.currentTime = seg.sourceStart;
+				if (videoEl.currentTime < seg.sourceStart || videoEl.currentTime >= seg.sourceEnd) {
+					videoEl.currentTime = seg.sourceStart;
 				}
-				void active.play().catch(() => uiState.setPlaybackState(false));
-			} else {
-				if (!videoA) return;
-				void videoA.play().catch(() => uiState.setPlaybackState(false));
 			}
+			void videoEl.play().catch(() => uiState.setPlaybackState(false));
 			return;
 		}
 
-		videoA?.pause();
-		videoB?.pause();
+		videoEl.pause();
 	});
 
 	// Playback clock
 	$effect(() => {
 		if (!mediaSrc || !uiState.isPlaying) return;
+		if (!videoEl) return;
 
 		if (uiState.silenceRemoved) {
 			playbackFrame = requestAnimationFrame(collapsedClock);
 		} else {
-			if (!videoA) return;
 			playbackFrame = requestAnimationFrame(normalClock);
 		}
 
@@ -258,9 +213,8 @@
 		{#if mediaSrc}
 			<!-- svelte-ignore a11y_media_has_caption -->
 			<video
-				bind:this={videoA}
+				bind:this={videoEl}
 				class="video-player"
-				class:video-hidden={uiState.silenceRemoved && activeKey !== 'A'}
 				src={mediaSrc}
 				preload="auto"
 				playsinline
@@ -271,16 +225,6 @@
 				onplay={handlePlay}
 				onpause={handlePause}
 				onended={handleEnded}
-			></video>
-			<!-- svelte-ignore a11y_media_has_caption -->
-			<video
-				bind:this={videoB}
-				class="video-player video-standby"
-				class:video-hidden={!uiState.silenceRemoved || activeKey !== 'B'}
-				src={mediaSrc}
-				preload="auto"
-				playsinline
-				aria-label="Video preview standby"
 			></video>
 			<div class="video-overlay">
 				<p class="filename">{filename}</p>
@@ -325,15 +269,6 @@
 		height: 100%;
 		object-fit: contain;
 		background: #000;
-	}
-
-	.video-standby {
-		z-index: 0;
-	}
-
-	.video-hidden {
-		opacity: 0;
-		pointer-events: none;
 	}
 
 	.video-overlay {
