@@ -15,6 +15,9 @@
 		const total = formatDuration(projectState.totalDuration);
 		const withoutSilence = formatDuration(projectState.totalDuration - projectState.silenceDuration);
 		const cuts = projectState.cutCount;
+		if (uiState.silenceRemoved) {
+			return `edited ${withoutSilence} \u2013 original ${total} \u2013 ${cuts} cuts`;
+		}
 		return `duration ${total} \u2013 ${withoutSilence} without silence \u2013 ${cuts} cuts`;
 	});
 </script>
