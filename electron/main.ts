@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, shell } from 'electron';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { Readable } from 'stream';
 import path from 'path';
 import serve from 'electron-serve';
 import { extractWaveform } from './waveform';
+import { probeFile } from './probe';
+import { runExport, cancelExport } from './export';
+import { writeEditorFile } from './exportEditors';
 
 const MEDIA_PROTOCOL = 'freecut-media';
 const MEDIA_MIME_TYPES: Record<string, string> = {
@@ -203,10 +206,10 @@ function registerIpcHandlers() {
 		}
 	);
 
-	ipcMain.handle('dialog:saveFile', async (_event, defaultName: string) => {
+	ipcMain.handle('dialog:saveFile', async (_event, defaultName: string, filters?: { name: string; extensions: string[] }[]) => {
 		const result = await dialog.showSaveDialog(mainWindow!, {
 			defaultPath: defaultName,
-			filters: [
+			filters: filters ?? [
 				{ name: 'MP4 Video', extensions: ['mp4'] },
 				{ name: 'MOV Video', extensions: ['mov'] },
 				{ name: 'WAV Audio', extensions: ['wav'] },
@@ -219,5 +222,64 @@ function registerIpcHandlers() {
 		}
 
 		return result.filePath;
+	});
+
+	ipcMain.handle('media:probe', async (_event, filePath: string) => {
+		return probeFile(filePath);
+	});
+
+	ipcMain.handle('media:export', async (event, request: {
+		sourceFile: string;
+		segments: { start: number; end: number }[];
+		format: string;
+		outputPath: string;
+		quality?: string;
+		framerate?: number;
+	}) => {
+		const editorFormats = ['edl', 'fcpxml', 'aaf'];
+
+		if (editorFormats.includes(request.format)) {
+			const probeResult = await probeFile(request.sourceFile);
+			const fps = request.framerate ?? probeResult.fps;
+			const title = request.sourceFile.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Untitled';
+
+			return writeEditorFile(
+				request.outputPath,
+				request.segments,
+				request.format as 'edl' | 'fcpxml' | 'aaf',
+				title,
+				fps,
+				request.sourceFile,
+				probeResult.duration
+			);
+		}
+
+		const probeResult = await probeFile(request.sourceFile);
+		const hasVideo = ['mp4', 'mov'].includes(request.format);
+
+		return runExport({
+			sourceFile: request.sourceFile,
+			segments: request.segments,
+			format: request.format,
+			outputPath: request.outputPath,
+			quality: (request.quality as 'low' | 'medium' | 'high' | 'original') ?? 'medium',
+			hasVideo,
+			sourceBitrate: probeResult.videoBitrate,
+			onProgress: (progress) => {
+				event.sender.send('media:exportProgress', progress);
+			}
+		});
+	});
+
+	ipcMain.handle('media:exportCancel', async () => {
+		cancelExport();
+	});
+
+	ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
+		await shell.openPath(filePath);
+	});
+
+	ipcMain.handle('shell:showInFolder', async (_event, filePath: string) => {
+		shell.showItemInFolder(filePath);
 	});
 }

@@ -14,11 +14,16 @@ type WaveformChunk = {
 	peaks: number[];
 };
 
+type ExportProgress = {
+	percent: number;
+	timeRemaining: number | null;
+};
+
 const electronAPI = {
 	openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
 
-	saveFile: (defaultName: string): Promise<string | null> =>
-		ipcRenderer.invoke('dialog:saveFile', defaultName),
+	saveFile: (defaultName: string, filters?: { name: string; extensions: string[] }[]): Promise<string | null> =>
+		ipcRenderer.invoke('dialog:saveFile', defaultName, filters),
 
 	extractWaveform: (request: WaveformExtractRequest | string) =>
 		ipcRenderer.invoke('media:extractWaveform', request),
@@ -35,7 +40,31 @@ const electronAPI = {
 			callback(filePath);
 		ipcRenderer.on('file:opened', handler);
 		return () => ipcRenderer.removeListener('file:opened', handler);
-	}
+	},
+
+	probe: (filePath: string) => ipcRenderer.invoke('media:probe', filePath),
+
+	startExport: (request: {
+		sourceFile: string;
+		segments: { start: number; end: number }[];
+		format: string;
+		outputPath: string;
+		quality?: string;
+		framerate?: number;
+	}) => ipcRenderer.invoke('media:export', request),
+
+	cancelExport: () => ipcRenderer.invoke('media:exportCancel'),
+
+	onExportProgress: (callback: (progress: ExportProgress) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, progress: ExportProgress) =>
+			callback(progress);
+		ipcRenderer.on('media:exportProgress', handler);
+		return () => ipcRenderer.removeListener('media:exportProgress', handler);
+	},
+
+	shellOpenPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
+
+	shellShowInFolder: (filePath: string) => ipcRenderer.invoke('shell:showInFolder', filePath)
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
