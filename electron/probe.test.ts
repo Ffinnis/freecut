@@ -18,7 +18,8 @@ const SAMPLE_PROBE_OUTPUT = JSON.stringify({
     }
   ],
   format: {
-    duration: '120.500000'
+    duration: '120.500000',
+    size: '75432123'
   }
 });
 
@@ -29,6 +30,7 @@ describe('parseProbeOutput', () => {
       fps: expect.closeTo(29.97, 1),
       width: 1920,
       height: 1080,
+      fileSize: 75432123,
       videoBitrate: 5000000,
       audioBitrate: 128000,
       duration: 120.5,
@@ -43,7 +45,7 @@ describe('parseProbeOutput', () => {
         { codec_type: 'video', codec_name: 'h264', width: 1280, height: 720, r_frame_rate: '24/1', bit_rate: '3000000' },
         { codec_type: 'audio', codec_name: 'aac', bit_rate: '96000' }
       ],
-      format: { duration: '60.0' }
+      format: { duration: '60.0', size: '12345678' }
     });
     const result = parseProbeOutput(output);
     expect(result.fps).toBe(24);
@@ -55,12 +57,13 @@ describe('parseProbeOutput', () => {
       streams: [
         { codec_type: 'audio', codec_name: 'mp3', bit_rate: '320000' }
       ],
-      format: { duration: '180.0' }
+      format: { duration: '180.0', size: '7200000' }
     });
     const result = parseProbeOutput(output);
     expect(result.fps).toBe(0);
     expect(result.width).toBe(0);
     expect(result.height).toBe(0);
+    expect(result.fileSize).toBe(7200000);
     expect(result.videoCodec).toBe('');
     expect(result.audioCodec).toBe('mp3');
   });
@@ -71,9 +74,10 @@ describe('parseProbeOutput', () => {
         { codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, r_frame_rate: '30/1' },
         { codec_type: 'audio', codec_name: 'aac' }
       ],
-      format: { duration: '10.0' }
+      format: { duration: '10.0', size: '640000' }
     });
     const result = parseProbeOutput(output);
+    expect(result.fileSize).toBe(640000);
     expect(result.videoBitrate).toBe(0);
     expect(result.audioBitrate).toBe(0);
   });

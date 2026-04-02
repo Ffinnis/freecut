@@ -43,6 +43,7 @@ export interface ProbeResult {
 	fps: number;
 	width: number;
 	height: number;
+	fileSize: number;
 	videoBitrate: number;
 	audioBitrate: number;
 	duration: number;

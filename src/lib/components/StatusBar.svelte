@@ -10,6 +10,55 @@
 		return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 	}
 
+	function formatFileSize(bytes: number): string {
+		if (bytes <= 0) return '';
+		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		let value = bytes;
+		let unitIndex = 0;
+
+		while (value >= 1024 && unitIndex < units.length - 1) {
+			value /= 1024;
+			unitIndex += 1;
+		}
+
+		const digits = value >= 100 || unitIndex === 0 ? 0 : 1;
+		return `${value.toFixed(digits)} ${units[unitIndex]}`;
+	}
+
+	function formatCodecLabel(): string {
+		const metadata = projectState.probeResult;
+		if (!metadata) return '';
+
+		const codecs = [metadata.videoCodec, metadata.audioCodec]
+			.filter(Boolean)
+			.map((codec) => codec.toUpperCase());
+
+		return codecs.join(' / ');
+	}
+
+	let mediaText = $derived.by(() => {
+		if (!projectState.hasProject) return '';
+
+		const metadata = projectState.probeResult;
+		const parts = [formatDuration(metadata?.duration || projectState.totalDuration)];
+
+		if (metadata?.width && metadata?.height) {
+			parts.push(`${metadata.width}×${metadata.height}`);
+		}
+
+		const codecLabel = formatCodecLabel();
+		if (codecLabel) {
+			parts.push(codecLabel);
+		}
+
+		const fileSize = metadata ? formatFileSize(metadata.fileSize) : '';
+		if (fileSize) {
+			parts.push(fileSize);
+		}
+
+		return parts.join(' · ');
+	});
+
 	let durationText = $derived.by(() => {
 		if (!projectState.hasProject) return '';
 		const total = formatDuration(projectState.totalDuration);
@@ -25,7 +74,7 @@
 <div class="status-bar">
 	<div class="left">
 		{#if projectState.hasProject}
-			<span class="fps">60fps</span>
+			<span class="media-text">{mediaText}</span>
 		{/if}
 	</div>
 	<div class="center">
@@ -68,12 +117,14 @@
 	}
 
 	.left {
-		min-width: 60px;
+		flex: 1;
+		min-width: 0;
 	}
 
 	.center {
 		flex: 1;
 		justify-content: center;
+		min-width: 0;
 	}
 
 	.right {
@@ -81,15 +132,20 @@
 		justify-content: flex-end;
 	}
 
-	.fps {
+	.media-text {
 		font-size: 0.625rem;
 		color: var(--text-muted);
-		font-family: var(--font-mono);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.duration-text {
 		font-size: 0.625rem;
 		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.zoom-icon {

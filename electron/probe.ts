@@ -5,6 +5,7 @@ export interface ProbeResult {
   fps: number;
   width: number;
   height: number;
+  fileSize: number;
   videoBitrate: number;
   audioBitrate: number;
   duration: number;
@@ -23,7 +24,10 @@ interface ProbeStream {
 
 interface ProbeOutput {
   streams: ProbeStream[];
-  format: { duration: string };
+  format: {
+    duration?: string;
+    size?: string;
+  };
 }
 
 export function parseProbeOutput(jsonString: string): ProbeResult {
@@ -41,6 +45,7 @@ export function parseProbeOutput(jsonString: string): ProbeResult {
     fps,
     width: video?.width ?? 0,
     height: video?.height ?? 0,
+    fileSize: parseInt(data.format.size ?? '0', 10) || 0,
     videoBitrate: parseInt(video?.bit_rate ?? '0', 10) || 0,
     audioBitrate: parseInt(audio?.bit_rate ?? '0', 10) || 0,
     duration: parseFloat(data.format.duration) || 0,

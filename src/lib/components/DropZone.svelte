@@ -8,6 +8,7 @@
 
 		const supportsWaveformChunks = typeof window.electronAPI?.onWaveformChunk === 'function';
 		const requestId = projectState.beginWaveformLoad(path);
+		void projectState.loadProbe(path);
 
 		try {
 			const data = await window.electronAPI.extractWaveform(

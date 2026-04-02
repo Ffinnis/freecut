@@ -1,4 +1,4 @@
-import type { ExportFormat, VideoQuality, ProbeResult, ExportProgress } from '$lib/types/ipc';
+import type { ExportFormat, VideoQuality, ExportProgress } from '$lib/types/ipc';
 
 export type ExportUiState = 'grid' | 'settings' | 'exporting' | 'done';
 
@@ -7,8 +7,6 @@ class ExportState {
 	selectedFormat = $state<ExportFormat>('mp4');
 	selectedQuality = $state<VideoQuality>('medium');
 	selectedFramerate = $state<number>(30);
-	probeResult = $state<ProbeResult | null>(null);
-	probing = $state(false);
 	progress = $state<ExportProgress>({ percent: 0, timeRemaining: null });
 	exportError = $state<string | null>(null);
 	outputPath = $state<string>('');
@@ -16,7 +14,6 @@ class ExportState {
 
 	reset() {
 		this.uiState = 'grid';
-		this.probeResult = null;
 		this.exportError = null;
 		this.outputPath = '';
 		this.progress = { percent: 0, timeRemaining: null };

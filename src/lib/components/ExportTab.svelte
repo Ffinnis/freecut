@@ -47,18 +47,12 @@
 
 		if (!projectState.project) return;
 
-		if (!exportState.probeResult) {
-			exportState.probing = true;
-			try {
-				exportState.probeResult = await window.electronAPI.probe(projectState.project.sourceFile);
-				const closest = FRAMERATES.reduce((prev, curr) =>
-					Math.abs(curr - exportState.probeResult!.fps) < Math.abs(prev - exportState.probeResult!.fps) ? curr : prev
-				);
-				exportState.selectedFramerate = closest;
-			} catch {
-				// proceed without probe data
-			}
-			exportState.probing = false;
+		const probeResult = await projectState.ensureProbeForCurrentProject();
+		if (probeResult?.fps) {
+			const closest = FRAMERATES.reduce((prev, curr) =>
+				Math.abs(curr - probeResult.fps) < Math.abs(prev - probeResult.fps) ? curr : prev
+			);
+			exportState.selectedFramerate = closest;
 		}
 
 		exportState.uiState = 'settings';
@@ -66,7 +60,6 @@
 
 	function goBack() {
 		exportState.uiState = 'grid';
-		exportState.probeResult = null;
 		exportState.exportError = null;
 	}
 
@@ -180,7 +173,7 @@
 			<h3>Export {FORMAT_LABELS[exportState.selectedFormat]}</h3>
 		</div>
 
-		{#if exportState.probing}
+		{#if projectState.probeLoading && !projectState.probeResult}
 			<p class="probing">Analyzing source...</p>
 		{:else}
 			{#if needsQuality}

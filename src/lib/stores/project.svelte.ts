@@ -6,7 +6,7 @@ import {
 	getEditDuration,
 	type EditSegment
 } from '$lib/utils/editTimeline';
-import type { WaveformData, WaveformChunk } from '$lib/types/ipc';
+import type { ProbeResult, WaveformData, WaveformChunk } from '$lib/types/ipc';
 import { uiState } from './ui.svelte';
 import { historyState } from './history.svelte';
 import { detectSilenceSegments } from '$lib/utils/silenceDetection';
@@ -19,6 +19,10 @@ class ProjectState {
 	waveform = $state<WaveformData | null>(null);
 	waveformLoading = $state(false);
 	waveformRequestId = $state<string | null>(null);
+	probeResult = $state<ProbeResult | null>(null);
+	probeLoading = $state(false);
+	probeRequestPath = $state<string | null>(null);
+	probePromise: Promise<ProbeResult | null> | null = null;
 	detectionTimer: ReturnType<typeof setTimeout> | null = null;
 	detectionFrame: number | null = null;
 
@@ -82,6 +86,10 @@ class ProjectState {
 		const requestId = crypto.randomUUID();
 
 		this.waveformRequestId = requestId;
+		this.probeResult = null;
+		this.probeLoading = false;
+		this.probeRequestPath = null;
+		this.probePromise = null;
 		this.project = {
 			id: crypto.randomUUID(),
 			sourceFile: path,
@@ -143,6 +151,47 @@ class ProjectState {
 
 		this.waveformRequestId = null;
 		this.waveformLoading = false;
+	}
+
+	async loadProbe(path: string): Promise<ProbeResult | null> {
+		if (typeof window === 'undefined' || !window.electronAPI?.probe) return null;
+
+		if (this.probeResult && this.project?.sourceFile === path) {
+			return this.probeResult;
+		}
+
+		if (this.probeLoading && this.probeRequestPath === path && this.probePromise) {
+			return this.probePromise;
+		}
+
+		this.probeLoading = true;
+		this.probeRequestPath = path;
+
+		const requestPath = path;
+		this.probePromise = window.electronAPI.probe(path)
+			.then((result) => {
+				if (this.project?.sourceFile === requestPath) {
+					this.probeResult = result;
+				}
+				return result;
+			})
+			.catch((err) => {
+				console.error('Probe failed:', err);
+				return null;
+			})
+			.finally(() => {
+				if (this.probeRequestPath === requestPath) {
+					this.probeLoading = false;
+					this.probePromise = null;
+				}
+			});
+
+		return this.probePromise;
+	}
+
+	async ensureProbeForCurrentProject(): Promise<ProbeResult | null> {
+		if (!this.project) return null;
+		return this.loadProbe(this.project.sourceFile);
 	}
 
 	applyIntensityPreset(preset: IntensityPreset) {
@@ -414,6 +463,10 @@ class ProjectState {
 		this.waveform = null;
 		this.waveformLoading = false;
 		this.waveformRequestId = null;
+		this.probeResult = null;
+		this.probeLoading = false;
+		this.probeRequestPath = null;
+		this.probePromise = null;
 		historyState.clear();
 		uiState.selectSegment(null);
 	}
