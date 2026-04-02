@@ -65,24 +65,27 @@ describe('generateFcpXml', () => {
     expect(xml).toContain('<?xml version="1.0"');
     expect(xml).toContain('<fcpxml version="1.11">');
     expect(xml).toContain('name="TestProject"');
-    expect(xml).toContain('src="file:///path/to/source.mp4"');
-    expect(xml).toContain('frameDuration="1/30s"');
-    expect((xml.match(/<clip /g) || []).length).toBe(3);
+    expect(xml).toContain('<format id="r1" name="FFVideoFormat1080p30" />');
+    expect(xml).toContain('<media-rep kind="original-media" src="file:///path/to/source.mp4" />');
+    expect(xml).toContain('<sequence format="r1">');
+    expect((xml.match(/<asset-clip /g) || []).length).toBe(3);
+    expect(xml).not.toContain('<asset id="r2" name="TestProject" src=');
   });
 
   it('handles 24fps frame duration', () => {
     const xml = generateFcpXml(SEGMENTS, 'Test', 24, '/path/source.mp4', 12, DEFAULT_MEDIA);
-    expect(xml).toContain('frameDuration="1/24s"');
+    expect(xml).toContain('name="FFVideoFormat1080p24"');
   });
 
   it('uses NTSC duration for 29.97fps', () => {
     const xml = generateFcpXml(SEGMENTS, 'Test', 29.97, '/path/source.mp4', 12, DEFAULT_MEDIA);
-    expect(xml).toContain('frameDuration="1001/30000s"');
+    expect(xml).toContain('name="FFVideoFormat1080p2997"');
   });
 
   it('uses actual dimensions from probe data', () => {
     const media = { width: 3840, height: 2160, hasVideo: true, hasAudio: true };
     const xml = generateFcpXml(SEGMENTS, 'Test', 30, '/path/source.mp4', 12, media);
+    expect(xml).toContain('frameDuration="1/30s"');
     expect(xml).toContain('width="3840"');
     expect(xml).toContain('height="2160"');
     expect(xml).not.toContain('width="1920"');
@@ -100,13 +103,20 @@ describe('generateFcpXml', () => {
   it('emits audio clip refs for audio-only media', () => {
     const media = { width: 0, height: 0, hasVideo: false, hasAudio: true };
     const xml = generateFcpXml(SEGMENTS, 'Podcast', 25, '/path/podcast.mp3', 180, media);
-    expect(xml).toContain('<audio ref="r2"');
+    expect(xml).toContain('<asset-clip name="Podcast" ref="r2"');
+    expect(xml).not.toContain('<audio ref=');
     expect(xml).not.toContain('<video ref=');
   });
 
   it('emits video clip refs for video media', () => {
     const xml = generateFcpXml(SEGMENTS, 'Test', 30, '/path/source.mp4', 12, DEFAULT_MEDIA);
-    expect(xml).toContain('<video ref="r2"');
+    expect(xml).toContain('<asset-clip name="Test" ref="r2"');
     expect(xml).not.toContain('<audio ref=');
+    expect(xml).not.toContain('<video ref=');
+  });
+
+  it('encodes file URLs safely for paths with spaces', () => {
+    const xml = generateFcpXml(SEGMENTS, 'Test', 30, '/tmp/My File.mp4', 12, DEFAULT_MEDIA);
+    expect(xml).toContain('src="file:///tmp/My%20File.mp4"');
   });
 });

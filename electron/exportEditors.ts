@@ -1,4 +1,5 @@
 import { writeFile } from 'fs/promises';
+import { pathToFileURL } from 'url';
 
 interface ExportSegment {
   start: number;
@@ -10,6 +11,15 @@ interface FcpMediaInfo {
   height: number;
   hasVideo: boolean;
   hasAudio: boolean;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 export function secondsToTimecode(seconds: number, fps: number): string {
@@ -73,6 +83,32 @@ function frameDurationStr(fps: number): string {
   return `1/${Math.round(fps)}s`;
 }
 
+function canonicalFpsLabel(fps: number): string {
+  const rounded = Math.round(fps * 100) / 100;
+  const aliases = new Map<number, string>([
+    [23.98, '2398'],
+    [23.976, '2398'],
+    [24, '24'],
+    [25, '25'],
+    [29.97, '2997'],
+    [30, '30'],
+    [50, '50'],
+    [59.94, '5994'],
+    [60, '60']
+  ]);
+
+  return aliases.get(rounded) ?? String(Math.round(fps));
+}
+
+function resolveVideoFormatName(width: number, height: number, fps: number): string | null {
+  const fpsLabel = canonicalFpsLabel(fps);
+
+  if (width === 1920 && height === 1080) return `FFVideoFormat1080p${fpsLabel}`;
+  if (width === 1280 && height === 720) return `FFVideoFormat720p${fpsLabel}`;
+
+  return null;
+}
+
 function secondsToFcpTime(seconds: number, fps: number): string {
   const frames = Math.round(seconds * fps);
   const rationalFps = Math.round(fps * 1000);
@@ -88,18 +124,20 @@ export function generateFcpXml(
   media: FcpMediaInfo
 ): string {
   const fd = frameDurationStr(fps);
-  const fileUrl = `file://${sourceFilePath}`;
-  const totalEditDuration = segments.reduce((sum, s) => sum + (s.end - s.start), 0);
-  const totalEditTime = secondsToFcpTime(totalEditDuration, fps);
+  const fileUrl = pathToFileURL(sourceFilePath).href;
+  const escapedTitle = escapeXml(title);
+  const escapedFileUrl = escapeXml(fileUrl);
   const srcDurTime = secondsToFcpTime(sourceDuration, fps);
+  const formatName = media.hasVideo ? resolveVideoFormatName(media.width, media.height, fps) : null;
 
   const formatAttrs = media.hasVideo
-    ? `name="FFVideoFormat" frameDuration="${fd}" width="${media.width}" height="${media.height}"`
+    ? formatName
+      ? `name="${formatName}"`
+      : `frameDuration="${fd}" width="${media.width}" height="${media.height}"`
     : `name="FFAudioFormat" frameDuration="${fd}"`;
   const hasVideoAttr = media.hasVideo ? '1' : '0';
   const hasAudioAttr = media.hasAudio ? '1' : '0';
-  const refTag = media.hasVideo ? 'video' : 'audio';
-  const extraAttrs = !media.hasVideo ? ' srcCh="1, 2"' : '';
+  const assetFormatAttr = media.hasVideo ? ' format="r1"' : '';
 
   let clipXml = '';
   let offset = 0;
@@ -110,9 +148,7 @@ export function generateFcpXml(
     const durationTime = secondsToFcpTime(duration, fps);
     const startTime = secondsToFcpTime(seg.start, fps);
 
-    clipXml += `                <clip name="${title}" offset="${offsetTime}" duration="${durationTime}" start="${startTime}" tcFormat="NDF">
-                    <${refTag} ref="r2" offset="${startTime}" duration="${durationTime}" start="${startTime}"${extraAttrs} />
-                </clip>\n`;
+    clipXml += `                        <asset-clip name="${escapedTitle}" ref="r2" offset="${offsetTime}" start="${startTime}" duration="${durationTime}" />\n`;
 
     offset += duration;
   }
@@ -122,12 +158,14 @@ export function generateFcpXml(
 <fcpxml version="1.11">
     <resources>
         <format id="r1" ${formatAttrs} />
-        <asset id="r2" name="${title}" src="${fileUrl}" start="0s" duration="${srcDurTime}" hasVideo="${hasVideoAttr}" hasAudio="${hasAudioAttr}" />
+        <asset id="r2" name="${escapedTitle}" start="0s" duration="${srcDurTime}" hasVideo="${hasVideoAttr}" hasAudio="${hasAudioAttr}"${assetFormatAttr}>
+            <media-rep kind="original-media" src="${escapedFileUrl}" />
+        </asset>
     </resources>
     <library>
-        <event name="${title}">
-            <project name="${title}">
-                <sequence format="r1" duration="${totalEditTime}" tcStart="0s" tcFormat="NDF">
+        <event name="${escapedTitle}">
+            <project name="${escapedTitle}">
+                <sequence format="r1">
                     <spine>
 ${clipXml.trimEnd()}
                     </spine>
