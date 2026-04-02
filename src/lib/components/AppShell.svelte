@@ -161,23 +161,31 @@
 
 </script>
 
-<div class="app-shell">
-	<div class="titlebar-drag"></div>
-	<div class="preview-area">
-		{#if projectState.hasProject}
+{#if projectState.hasProject}
+	<div class="app-shell has-project">
+		<div class="titlebar-drag"></div>
+		<div class="preview-area">
 			<VideoPreview />
-		{:else}
-			<DropZone />
-		{/if}
+		</div>
+		<Sidebar />
+		<TransportBar />
+		<Timeline />
+		<StatusBar />
 	</div>
-	<Sidebar />
-	<TransportBar />
-	<Timeline />
-	<StatusBar />
-</div>
+{:else}
+	<div class="app-shell empty">
+		<div class="titlebar-drag"></div>
+		<DropZone />
+	</div>
+{/if}
 
 <style>
 	.app-shell {
+		height: 100vh;
+		background: var(--bg-primary);
+	}
+
+	.app-shell.has-project {
 		display: grid;
 		grid-template-areas:
 			'preview sidebar'
@@ -186,8 +194,12 @@
 			'status status';
 		grid-template-columns: 1fr var(--sidebar-width);
 		grid-template-rows: 1fr var(--transport-height) var(--timeline-min-height) var(--statusbar-height);
-		height: 100vh;
-		background: var(--bg-primary);
+	}
+
+	.app-shell.empty {
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.titlebar-drag {

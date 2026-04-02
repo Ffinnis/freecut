@@ -350,6 +350,7 @@
 		background: var(--bg-primary);
 		overflow: hidden;
 		position: relative;
+		border-top: 1px solid var(--border);
 	}
 
 	.gutter-column {

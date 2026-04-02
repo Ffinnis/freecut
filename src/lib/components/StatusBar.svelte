@@ -48,7 +48,7 @@
 		const parts = [formatDuration(metadata?.duration || projectState.totalDuration)];
 
 		if (metadata?.width && metadata?.height) {
-			parts.push(`${metadata.width}×${metadata.height}`);
+			parts.push(`${metadata.width}\u00d7${metadata.height}`);
 		}
 
 		const fpsLabel = metadata ? formatFpsLabel(metadata.fps) : '';
@@ -66,7 +66,7 @@
 			parts.push(fileSize);
 		}
 
-		return parts.join(' · ');
+		return parts.join(' \u00b7 ');
 	});
 
 	let durationText = $derived.by(() => {
@@ -93,7 +93,7 @@
 		{/if}
 	</div>
 	<div class="right">
-		<svg class="zoom-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<svg class="zoom-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 			<circle cx="11" cy="11" r="8" />
 			<line x1="21" y1="21" x2="16.65" y2="16.65" />
 		</svg>
@@ -143,7 +143,7 @@
 	}
 
 	.media-text {
-		font-size: 0.625rem;
+		font-size: 0.6875rem;
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -151,11 +151,12 @@
 	}
 
 	.duration-text {
-		font-size: 0.625rem;
-		color: var(--text-muted);
+		font-size: 0.6875rem;
+		color: var(--text-secondary);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.zoom-icon {
@@ -181,5 +182,10 @@
 		border-radius: 50%;
 		background: var(--text-secondary);
 		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.zoom-slider::-webkit-slider-thumb:hover {
+		background: var(--text-primary);
 	}
 </style>

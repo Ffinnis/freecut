@@ -78,8 +78,8 @@
 	}
 
 	.segment-row.selected {
-		background: rgba(255, 255, 255, 0.08);
-		outline: 1px solid rgba(255, 255, 255, 0.24);
+		background: var(--accent-subtle);
+		box-shadow: inset 2px 0 0 var(--accent);
 	}
 
 	.type-badge {
