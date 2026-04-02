@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { projectState } from './project.svelte';
 import { historyState } from './history.svelte';
 import { uiState } from './ui.svelte';
 import type { Segment } from '$lib/types/project';
+import type { WaveformData } from '$lib/types/ipc';
 
 function seg(
 	start: number,
@@ -252,5 +253,68 @@ describe('navigation helpers', () => {
 
 	it('adjacentSegmentId returns null for unknown id', () => {
 		expect(projectState.adjacentSegmentId('nope', 1)).toBeNull();
+	});
+});
+
+describe('source file loading', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		projectState.reset();
+	});
+
+	it('browseForSourceFile opens and loads the selected file', async () => {
+		const waveform: WaveformData = {
+			duration: 12,
+			peaksPerSecond: 200,
+			peaks: [0.1, 0.4, 0.2]
+		};
+		const openFile = vi.fn().mockResolvedValue('/new-file.mp4');
+		const extractWaveform = vi.fn().mockResolvedValue(waveform);
+		const probe = vi.fn().mockResolvedValue({
+			fps: 30,
+			width: 1920,
+			height: 1080,
+			fileSize: 1000,
+			videoBitrate: 8000,
+			audioBitrate: 320,
+			duration: 12,
+			videoCodec: 'h264',
+			audioCodec: 'aac'
+		});
+
+		vi.stubGlobal('window', {
+			electronAPI: {
+				openFile,
+				extractWaveform,
+				onWaveformChunk: vi.fn(),
+				probe
+			}
+		});
+
+		await projectState.browseForSourceFile();
+
+		expect(openFile).toHaveBeenCalledOnce();
+		expect(extractWaveform).toHaveBeenCalledOnce();
+		expect(projectState.project?.sourceFile).toBe('/new-file.mp4');
+		expect(projectState.waveform?.duration).toBe(12);
+		expect(projectState.waveformLoading).toBe(false);
+	});
+
+	it('browseForSourceFile does nothing when picker is canceled', async () => {
+		const openFile = vi.fn().mockResolvedValue(null);
+		const extractWaveform = vi.fn();
+
+		vi.stubGlobal('window', {
+			electronAPI: {
+				openFile,
+				extractWaveform
+			}
+		});
+
+		await projectState.browseForSourceFile();
+
+		expect(openFile).toHaveBeenCalledOnce();
+		expect(extractWaveform).not.toHaveBeenCalled();
+		expect(projectState.project).toBeNull();
 	});
 });

@@ -86,6 +86,7 @@ class ProjectState {
 		const requestId = crypto.randomUUID();
 
 		this.waveformRequestId = requestId;
+		uiState.setSourceFps(null);
 		this.probeResult = null;
 		this.probeLoading = false;
 		this.probeRequestPath = null;
@@ -98,6 +99,7 @@ class ProjectState {
 			segments: [],
 			settings: { ...this.settings }
 		};
+		uiState.resetPlayback();
 		uiState.selectSegment(null);
 		this.clearPendingDetection();
 		this.clearPendingDetectionFrame();
@@ -105,6 +107,31 @@ class ProjectState {
 		this.waveformLoading = true;
 
 		return requestId;
+	}
+
+	async loadSourceFile(path: string) {
+		if (!path || typeof window === 'undefined' || !window.electronAPI?.extractWaveform) return;
+
+		const supportsWaveformChunks = typeof window.electronAPI.onWaveformChunk === 'function';
+		const requestId = this.beginWaveformLoad(path);
+		void this.loadProbe(path);
+
+		try {
+			const data = await window.electronAPI.extractWaveform(
+				supportsWaveformChunks ? { filePath: path, requestId } : path
+			);
+			this.finishWaveformLoad(requestId, path, data);
+		} catch (err) {
+			console.error('Waveform extraction failed:', err);
+			this.failWaveformLoad(requestId);
+		}
+	}
+
+	async browseForSourceFile() {
+		if (typeof window === 'undefined' || !window.electronAPI?.openFile) return;
+		const path = await window.electronAPI.openFile();
+		if (!path) return;
+		await this.loadSourceFile(path);
 	}
 
 	applyWaveformChunk(chunk: WaveformChunk) {
@@ -172,6 +199,7 @@ class ProjectState {
 			.then((result) => {
 				if (this.project?.sourceFile === requestPath) {
 					this.probeResult = result;
+					uiState.setSourceFps(result.fps);
 				}
 				return result;
 			})
@@ -463,6 +491,7 @@ class ProjectState {
 		this.waveform = null;
 		this.waveformLoading = false;
 		this.waveformRequestId = null;
+		uiState.setSourceFps(null);
 		this.probeResult = null;
 		this.probeLoading = false;
 		this.probeRequestPath = null;

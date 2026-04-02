@@ -36,6 +36,11 @@
 		return codecs.join(' / ');
 	}
 
+	function formatFpsLabel(fps: number): string {
+		if (!Number.isFinite(fps) || fps <= 0) return '';
+		return `${fps.toFixed(3).replace(/\.?0+$/, '')} fps`;
+	}
+
 	let mediaText = $derived.by(() => {
 		if (!projectState.hasProject) return '';
 
@@ -44,6 +49,11 @@
 
 		if (metadata?.width && metadata?.height) {
 			parts.push(`${metadata.width}×${metadata.height}`);
+		}
+
+		const fpsLabel = metadata ? formatFpsLabel(metadata.fps) : '';
+		if (fpsLabel) {
+			parts.push(fpsLabel);
 		}
 
 		const codecLabel = formatCodecLabel();

@@ -40,6 +40,13 @@
 	});
 
 	$effect(() => {
+		if (typeof window === 'undefined' || !window.electronAPI?.onFileOpened) return;
+		return window.electronAPI.onFileOpened((filePath) => {
+			void projectState.loadSourceFile(filePath);
+		});
+	});
+
+	$effect(() => {
 		if (typeof window === 'undefined') return;
 
 		const isMac = navigator.platform.startsWith('Mac');
@@ -151,6 +158,7 @@
 		window.addEventListener('keydown', handleKeydown, true);
 		return () => window.removeEventListener('keydown', handleKeydown, true);
 	});
+
 </script>
 
 <div class="app-shell">

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, shell, Menu } from 'electron';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { Readable } from 'stream';
@@ -40,6 +40,106 @@ const loadURL = isDev
 	: serve({ directory: path.join(__dirname, '../build') });
 
 let mainWindow: BrowserWindow | null = null;
+
+async function showOpenMediaDialog(browserWindow: BrowserWindow) {
+	const result = await dialog.showOpenDialog(browserWindow, {
+		properties: ['openFile'],
+		filters: [
+			{
+				name: 'Media Files',
+				extensions: ['mp4', 'mov', 'mkv', 'webm', 'wav', 'mp3', 'aac']
+			}
+		]
+	});
+
+	if (result.canceled || result.filePaths.length === 0) {
+		return null;
+	}
+
+	return result.filePaths[0];
+}
+
+async function openSourceFileFromMenu(browserWindow: BrowserWindow | null) {
+	if (!browserWindow) return;
+	const filePath = await showOpenMediaDialog(browserWindow);
+	if (!filePath) return;
+	browserWindow.webContents.send('file:opened', filePath);
+}
+
+function installApplicationMenu() {
+	const appSubmenu: Electron.MenuItemConstructorOptions[] = [
+		{ role: 'about' },
+		{ type: 'separator' },
+		{ role: 'services' },
+		{ type: 'separator' },
+		{ role: 'hide' },
+		{ role: 'hideOthers' },
+		{ role: 'unhide' },
+		{ type: 'separator' },
+		{ role: 'quit' }
+	];
+
+	const fileSubmenu: Electron.MenuItemConstructorOptions[] = [
+		{
+			label: 'Open...',
+			accelerator: 'CmdOrCtrl+O',
+			click: () => {
+				void openSourceFileFromMenu(mainWindow);
+			}
+		},
+		{ type: 'separator' },
+		process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' }
+	];
+
+	const editSubmenu: Electron.MenuItemConstructorOptions[] = [
+		{ role: 'undo' },
+		{ role: 'redo' },
+		{ type: 'separator' },
+		{ role: 'cut' },
+		{ role: 'copy' },
+		{ role: 'paste' }
+	];
+	if (process.platform === 'darwin') {
+		editSubmenu.push({ role: 'pasteAndMatchStyle' }, { role: 'delete' }, { role: 'selectAll' });
+	} else {
+		editSubmenu.push({ role: 'delete' }, { type: 'separator' }, { role: 'selectAll' });
+	}
+
+	const viewSubmenu: Electron.MenuItemConstructorOptions[] = [
+		{ role: 'reload' },
+		{ role: 'forceReload' },
+		{ role: 'toggleDevTools' },
+		{ type: 'separator' },
+		{ role: 'resetZoom' },
+		{ role: 'zoomIn' },
+		{ role: 'zoomOut' },
+		{ type: 'separator' },
+		{ role: 'togglefullscreen' }
+	];
+
+	const windowSubmenu: Electron.MenuItemConstructorOptions[] = [
+		{ role: 'minimize' },
+		{ role: 'zoom' }
+	];
+	if (process.platform === 'darwin') {
+		windowSubmenu.push({ type: 'separator' }, { role: 'front' });
+	} else {
+		windowSubmenu.push({ role: 'close' });
+	}
+
+	const template: Electron.MenuItemConstructorOptions[] = [
+		...(process.platform === 'darwin'
+			? [{ label: app.name, submenu: appSubmenu }]
+			: []),
+		{ label: 'File', submenu: fileSubmenu },
+		{ label: 'Edit', submenu: editSubmenu },
+		{ label: 'View', submenu: viewSubmenu },
+		{ label: 'Window', submenu: windowSubmenu },
+		{ role: 'help', submenu: [] }
+	];
+
+	Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function getMediaMimeType(filePath: string) {
 	return MEDIA_MIME_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
@@ -159,6 +259,7 @@ function createWindow() {
 app.whenReady().then(() => {
 	registerMediaProtocol();
 	createWindow();
+	installApplicationMenu();
 	registerIpcHandlers();
 
 	app.on('activate', () => {
@@ -176,21 +277,8 @@ app.on('window-all-closed', () => {
 
 function registerIpcHandlers() {
 	ipcMain.handle('dialog:openFile', async () => {
-		const result = await dialog.showOpenDialog(mainWindow!, {
-			properties: ['openFile'],
-			filters: [
-				{
-					name: 'Media Files',
-					extensions: ['mp4', 'mov', 'mkv', 'webm', 'wav', 'mp3', 'aac']
-				}
-			]
-		});
-
-		if (result.canceled || result.filePaths.length === 0) {
-			return null;
-		}
-
-		return result.filePaths[0];
+		if (!mainWindow) return null;
+		return showOpenMediaDialog(mainWindow);
 	});
 
 	ipcMain.handle(

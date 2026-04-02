@@ -2,6 +2,7 @@ class UIState {
 	activeTab = $state<'silence' | 'sections' | 'export'>('silence');
 	isPlaying = $state(false);
 	currentTime = $state(0);
+	sourceFps = $state<number | null>(null);
 	requestedSeekTime = $state(0);
 	seekRequestId = $state('');
 	zoomFraction = $state(0);
@@ -17,8 +18,11 @@ class UIState {
 		const h = Math.floor(total / 3600);
 		const m = Math.floor((total % 3600) / 60);
 		const s = total % 60;
-		const f = Math.floor((this.currentTime - total) * 30);
-		return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(f).padStart(2, '0')}`;
+		const fps = this.sourceFps && this.sourceFps > 0 ? this.sourceFps : null;
+		const maxFrame = fps ? Math.max(0, Math.ceil(fps) - 1) : 0;
+		const frameDigits = Math.max(2, String(maxFrame).length);
+		const f = fps ? Math.min(Math.floor((this.currentTime - total) * fps), maxFrame) : 0;
+		return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:${String(f).padStart(frameDigits, '0')}`;
 	}
 
 	setPlaybackState(next: boolean) {
@@ -37,6 +41,10 @@ class UIState {
 		const safeDuration = Number.isFinite(duration) && duration >= 0 ? duration : 0;
 		const clamped = Math.min(Math.max(next, 0), safeDuration);
 		this.setCurrentTime(clamped);
+	}
+
+	setSourceFps(next: number | null) {
+		this.sourceFps = Number.isFinite(next) && (next ?? 0) > 0 ? next : null;
 	}
 
 	requestSeek(next: number, duration = Number.POSITIVE_INFINITY) {

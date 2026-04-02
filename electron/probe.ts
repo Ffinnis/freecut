@@ -34,6 +34,7 @@ export function parseProbeOutput(jsonString: string): ProbeResult {
   const data: ProbeOutput = JSON.parse(jsonString);
   const video = data.streams.find((s) => s.codec_type === 'video');
   const audio = data.streams.find((s) => s.codec_type === 'audio');
+  const durationText = typeof data.format.duration === 'string' ? data.format.duration : '0';
 
   let fps = 0;
   if (video?.r_frame_rate) {
@@ -41,17 +42,17 @@ export function parseProbeOutput(jsonString: string): ProbeResult {
     fps = den ? num / den : num;
   }
 
-  return {
-    fps,
-    width: video?.width ?? 0,
-    height: video?.height ?? 0,
-    fileSize: parseInt(data.format.size ?? '0', 10) || 0,
-    videoBitrate: parseInt(video?.bit_rate ?? '0', 10) || 0,
-    audioBitrate: parseInt(audio?.bit_rate ?? '0', 10) || 0,
-    duration: parseFloat(data.format.duration) || 0,
-    videoCodec: video?.codec_name ?? '',
-    audioCodec: audio?.codec_name ?? ''
-  };
+	return {
+	  fps,
+	  width: video?.width ?? 0,
+	  height: video?.height ?? 0,
+	  fileSize: parseInt(data.format.size ?? '0', 10) || 0,
+	  videoBitrate: parseInt(video?.bit_rate ?? '0', 10) || 0,
+	  audioBitrate: parseInt(audio?.bit_rate ?? '0', 10) || 0,
+	  duration: Number.parseFloat(durationText) || 0,
+	  videoCodec: video?.codec_name ?? '',
+	  audioCodec: audio?.codec_name ?? ''
+	};
 }
 
 export function probeFile(filePath: string): Promise<ProbeResult> {
