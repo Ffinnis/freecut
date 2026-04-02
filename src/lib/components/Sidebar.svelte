@@ -73,6 +73,9 @@
 		display: flex;
 		border-bottom: 1px solid var(--border);
 		flex-shrink: 0;
+		position: relative;
+		z-index: 101;
+		-webkit-app-region: no-drag;
 	}
 
 	.tab {
@@ -80,6 +83,7 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		justify-content: center;
 		gap: 0.25rem;
 		padding: 0.625rem 0.5rem;
 		background: none;
@@ -90,6 +94,11 @@
 		font-family: var(--font-sans);
 		cursor: pointer;
 		transition: color 0.15s, border-color 0.15s;
+		min-width: 0;
+	}
+
+	.tab :global(svg) {
+		pointer-events: none;
 	}
 
 	.tab:hover {

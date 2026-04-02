@@ -1,0 +1,91 @@
+<h2>Export Sidebar Flow</h2>
+<p class="subtitle">How should the inline export experience work? Three states shown below.</p>
+
+<div class="cards">
+  <div class="card" data-choice="format-grid" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a1e;border-radius:8px;padding:16px;font-family:system-ui;color:#ccc;font-size:12px;">
+        <div style="margin-bottom:12px;">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:6px;font-weight:600;">Video / Audio</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">MP4</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">MOV</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">WAV</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">MP3</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:6px;font-weight:600;">Editor Project</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">FCP XML</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">EDL</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;font-size:11px;">AAF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>State 1: Format Selection</h3>
+      <p>Current grid layout. User clicks a format button to begin.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="settings-view" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a1e;border-radius:8px;padding:16px;font-family:system-ui;color:#ccc;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;">
+          <div style="font-size:14px;cursor:pointer;">←</div>
+          <div style="font-weight:600;font-size:13px;">Export MP4</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:10px;color:#888;margin-bottom:4px;">Quality</div>
+          <div style="display:flex;gap:4px;">
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:5px 10px;font-size:10px;">Low</div>
+            <div style="background:#3a5aff;border:1px solid #3a5aff;border-radius:4px;padding:5px 10px;font-size:10px;color:white;">Medium</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:5px 10px;font-size:10px;">High</div>
+            <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:5px 10px;font-size:10px;">Original</div>
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:10px;color:#888;margin-bottom:4px;">Estimated size</div>
+          <div style="font-size:11px;">~84 MB</div>
+        </div>
+        <div style="background:#3a5aff;border:none;border-radius:4px;padding:8px;text-align:center;color:white;font-weight:600;font-size:12px;">
+          Export
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>State 2: Format Settings</h3>
+      <p>Back arrow + format title. Quality preset selector. Export button triggers save dialog then starts encoding.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="progress-view" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a1e;border-radius:8px;padding:16px;font-family:system-ui;color:#ccc;font-size:12px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;">
+          <div style="font-weight:600;font-size:13px;">Exporting MP4...</div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div style="background:#2a2a2e;border-radius:4px;height:6px;overflow:hidden;">
+            <div style="background:#3a5aff;height:100%;width:63%;border-radius:4px;"></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:14px;">
+          <span>63%</span>
+          <span>~0:42 remaining</span>
+        </div>
+        <div style="background:#2a2a2e;border:1px solid #3a3a3e;border-radius:4px;padding:8px;text-align:center;color:#ff6b6b;font-weight:600;font-size:12px;">
+          Cancel
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>State 3: Progress</h3>
+      <p>Progress bar, percentage, time estimate, cancel button. On completion: "Done ✓ — Open file / Open folder" links.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Click any card if something looks off, or respond in terminal with feedback.</p>

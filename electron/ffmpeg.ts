@@ -12,5 +12,11 @@ export function getFfmpegPath(): string {
 }
 
 export function getFfprobePath(): string {
-	return getFfmpegPath().replace(/ffmpeg$/, 'ffprobe');
+	const ffprobeStatic = require('ffprobe-static') as { path: string };
+
+	if (app.isPackaged) {
+		return ffprobeStatic.path.replace('app.asar', 'app.asar.unpacked');
+	}
+
+	return ffprobeStatic.path;
 }

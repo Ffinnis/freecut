@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
-	import type { ExportFormat, VideoQuality, ProbeResult, ExportProgress } from '$lib/types/ipc';
-
-	type UiState = 'grid' | 'settings' | 'exporting' | 'done';
+	import { exportState } from '$lib/stores/export.svelte';
+	import type { ExportFormat, VideoQuality } from '$lib/types/ipc';
 
 	const VIDEO_FORMATS: ExportFormat[] = ['mp4', 'mov'];
 	const AUDIO_FORMATS: ExportFormat[] = ['wav', 'mp3'];
@@ -32,20 +31,9 @@
 
 	const FRAMERATES = [23.976, 24, 25, 29.97, 30, 59.94, 60];
 
-	let uiState = $state<UiState>('grid');
-	let selectedFormat = $state<ExportFormat>('mp4');
-	let selectedQuality = $state<VideoQuality>('medium');
-	let selectedFramerate = $state<number>(30);
-	let probeResult = $state<ProbeResult | null>(null);
-	let probing = $state(false);
-	let progress = $state<ExportProgress>({ percent: 0, timeRemaining: null });
-	let exportError = $state<string | null>(null);
-	let outputPath = $state<string>('');
-	let progressCleanup: (() => void) | null = null;
-
-	const isVideoFormat = $derived(VIDEO_FORMATS.includes(selectedFormat));
-	const isEditorFormat = $derived(EDITOR_FORMATS.includes(selectedFormat));
-	const needsQuality = $derived(isVideoFormat || selectedFormat === 'mp3');
+	const isVideoFormat = $derived(VIDEO_FORMATS.includes(exportState.selectedFormat));
+	const isEditorFormat = $derived(EDITOR_FORMATS.includes(exportState.selectedFormat));
+	const needsQuality = $derived(isVideoFormat || exportState.selectedFormat === 'mp3');
 
 	function getKeptSegments(): { start: number; end: number }[] {
 		if (!projectState.project) return [];
@@ -55,32 +43,32 @@
 	}
 
 	async function selectFormat(format: ExportFormat) {
-		selectedFormat = format;
-		exportError = null;
+		exportState.selectedFormat = format;
+		exportState.exportError = null;
 
 		if (!projectState.project) return;
 
-		if (!probeResult) {
-			probing = true;
+		if (!exportState.probeResult) {
+			exportState.probing = true;
 			try {
-				probeResult = await window.electronAPI.probe(projectState.project.sourceFile);
+				exportState.probeResult = await window.electronAPI.probe(projectState.project.sourceFile);
 				const closest = FRAMERATES.reduce((prev, curr) =>
-					Math.abs(curr - probeResult!.fps) < Math.abs(prev - probeResult!.fps) ? curr : prev
+					Math.abs(curr - exportState.probeResult!.fps) < Math.abs(prev - exportState.probeResult!.fps) ? curr : prev
 				);
-				selectedFramerate = closest;
+				exportState.selectedFramerate = closest;
 			} catch {
 				// proceed without probe data
 			}
-			probing = false;
+			exportState.probing = false;
 		}
 
-		uiState = 'settings';
+		exportState.uiState = 'settings';
 	}
 
 	function goBack() {
-		uiState = 'grid';
-		probeResult = null;
-		exportError = null;
+		exportState.uiState = 'grid';
+		exportState.probeResult = null;
+		exportState.exportError = null;
 	}
 
 	async function startExport() {
@@ -88,73 +76,68 @@
 
 		const segments = getKeptSegments();
 		if (segments.length === 0) {
-			exportError = 'No segments to export — all content is removed.';
+			exportState.exportError = 'No segments to export — all content is removed.';
 			return;
 		}
 
 		const sourceName = projectState.project.sourceFile.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'export';
-		const ext = selectedFormat === 'fcpxml' ? 'fcpxml' : selectedFormat;
+		const ext = exportState.selectedFormat === 'fcpxml' ? 'fcpxml' : exportState.selectedFormat;
 		const defaultName = `${sourceName}_cut.${ext}`;
 
-		const savePath = await window.electronAPI.saveFile(defaultName, FORMAT_EXTENSIONS[selectedFormat]);
+		const savePath = await window.electronAPI.saveFile(defaultName, FORMAT_EXTENSIONS[exportState.selectedFormat]);
 		if (!savePath) return;
 
-		outputPath = savePath;
-		uiState = 'exporting';
-		progress = { percent: 0, timeRemaining: null };
-		exportError = null;
+		exportState.outputPath = savePath;
+		exportState.uiState = 'exporting';
+		exportState.progress = { percent: 0, timeRemaining: null };
+		exportState.exportError = null;
 
-		progressCleanup = window.electronAPI.onExportProgress((p) => {
-			progress = p;
+		exportState.progressCleanup = window.electronAPI.onExportProgress((p) => {
+			exportState.progress = p;
 		});
 
 		try {
 			const result = await window.electronAPI.startExport({
 				sourceFile: projectState.project.sourceFile,
 				segments,
-				format: selectedFormat,
+				format: exportState.selectedFormat,
 				outputPath: savePath,
-				quality: needsQuality ? selectedQuality : undefined,
-				framerate: isEditorFormat ? selectedFramerate : undefined
+				quality: needsQuality ? exportState.selectedQuality : undefined,
+				framerate: isEditorFormat ? exportState.selectedFramerate : undefined
 			});
 
-			progressCleanup?.();
-			progressCleanup = null;
+			exportState.cleanupProgress();
 
 			if (result.success) {
-				progress = { percent: 100, timeRemaining: 0 };
-				uiState = 'done';
+				exportState.progress = { percent: 100, timeRemaining: 0 };
+				exportState.uiState = 'done';
 			} else {
-				exportError = result.error ?? 'Export failed';
-				uiState = 'settings';
+				exportState.exportError = result.error ?? 'Export failed';
+				exportState.uiState = 'settings';
 			}
 		} catch (err) {
-			progressCleanup?.();
-			progressCleanup = null;
-			exportError = (err as Error).message;
-			uiState = 'settings';
+			exportState.cleanupProgress();
+			exportState.exportError = (err as Error).message;
+			exportState.uiState = 'settings';
 		}
 	}
 
 	async function handleCancel() {
 		await window.electronAPI.cancelExport();
-		progressCleanup?.();
-		progressCleanup = null;
-		uiState = 'grid';
+		exportState.cleanupProgress();
+		exportState.uiState = 'grid';
 	}
 
 	function openFile() {
-		if (outputPath) window.electronAPI.shellOpenPath(outputPath);
+		if (exportState.outputPath) window.electronAPI.shellOpenPath(exportState.outputPath);
 	}
 
 	function showInFolder() {
-		if (outputPath) window.electronAPI.shellShowInFolder(outputPath);
+		if (exportState.outputPath) window.electronAPI.shellShowInFolder(exportState.outputPath);
 	}
 
 	function exportAnother() {
-		uiState = 'grid';
-		exportError = null;
-		outputPath = '';
+		exportState.reset();
 	}
 
 	function formatTime(seconds: number | null): string {
@@ -170,7 +153,7 @@
 	{#if !projectState.hasProject}
 		<p class="empty">Load a file to export</p>
 
-	{:else if uiState === 'grid'}
+	{:else if exportState.uiState === 'grid'}
 		<div class="section">
 			<h3>Video / Audio</h3>
 			<div class="format-grid">
@@ -188,17 +171,17 @@
 			</div>
 		</div>
 
-	{:else if uiState === 'settings'}
+	{:else if exportState.uiState === 'settings'}
 		<div class="settings-header">
 			<button class="back-btn" onclick={goBack} aria-label="Back to format selection">
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<polyline points="15 18 9 12 15 6" />
 				</svg>
 			</button>
-			<h3>Export {FORMAT_LABELS[selectedFormat]}</h3>
+			<h3>Export {FORMAT_LABELS[exportState.selectedFormat]}</h3>
 		</div>
 
-		{#if probing}
+		{#if exportState.probing}
 			<p class="probing">Analyzing source...</p>
 		{:else}
 			{#if needsQuality}
@@ -208,8 +191,8 @@
 						{#each QUALITY_LABELS as q}
 							<button
 								class="quality-btn"
-								class:active={selectedQuality === q.value}
-								onclick={() => selectedQuality = q.value}
+								class:active={exportState.selectedQuality === q.value}
+								onclick={() => exportState.selectedQuality = q.value}
 							>{q.label}</button>
 						{/each}
 					</div>
@@ -219,7 +202,7 @@
 			{#if isEditorFormat}
 				<div class="section">
 					<label class="label" for="framerate-select">Framerate</label>
-					<select id="framerate-select" class="framerate-select" bind:value={selectedFramerate}>
+					<select id="framerate-select" class="framerate-select" bind:value={exportState.selectedFramerate}>
 						{#each FRAMERATES as fps}
 							<option value={fps}>{fps} fps</option>
 						{/each}
@@ -227,27 +210,27 @@
 				</div>
 			{/if}
 
-			{#if exportError}
-				<p class="error">{exportError}</p>
+			{#if exportState.exportError}
+				<p class="error">{exportState.exportError}</p>
 			{/if}
 
 			<button class="export-btn" onclick={startExport}>Export</button>
 		{/if}
 
-	{:else if uiState === 'exporting'}
+	{:else if exportState.uiState === 'exporting'}
 		<div class="progress-section">
-			<h3>Exporting {FORMAT_LABELS[selectedFormat]}...</h3>
+			<h3>Exporting {FORMAT_LABELS[exportState.selectedFormat]}...</h3>
 			<div class="progress-bar">
-				<div class="progress-fill" style="width: {progress.percent}%"></div>
+				<div class="progress-fill" style="width: {exportState.progress.percent}%"></div>
 			</div>
 			<div class="progress-info">
-				<span>{progress.percent}%</span>
-				<span>~{formatTime(progress.timeRemaining)} remaining</span>
+				<span>{exportState.progress.percent}%</span>
+				<span>~{formatTime(exportState.progress.timeRemaining)} remaining</span>
 			</div>
 			<button class="cancel-btn" onclick={handleCancel}>Cancel</button>
 		</div>
 
-	{:else if uiState === 'done'}
+	{:else if exportState.uiState === 'done'}
 		<div class="done-section">
 			<div class="done-icon">
 				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
