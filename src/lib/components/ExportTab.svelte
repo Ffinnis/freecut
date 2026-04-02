@@ -5,11 +5,11 @@
 
 	const VIDEO_FORMATS: ExportFormat[] = ['mp4', 'mov'];
 	const AUDIO_FORMATS: ExportFormat[] = ['wav', 'mp3'];
-	const EDITOR_FORMATS: ExportFormat[] = ['fcpxml', 'edl', 'aaf'];
+	const EDITOR_FORMATS: ExportFormat[] = ['fcpxml', 'edl'];
 
 	const FORMAT_LABELS: Record<ExportFormat, string> = {
 		mp4: 'MP4', mov: 'MOV', wav: 'WAV', mp3: 'MP3',
-		fcpxml: 'FCP XML', edl: 'EDL', aaf: 'AAF'
+		fcpxml: 'FCP XML', edl: 'EDL'
 	};
 
 	const FORMAT_EXTENSIONS: Record<ExportFormat, { name: string; extensions: string[] }[]> = {
@@ -18,8 +18,7 @@
 		wav: [{ name: 'WAV Audio', extensions: ['wav'] }],
 		mp3: [{ name: 'MP3 Audio', extensions: ['mp3'] }],
 		fcpxml: [{ name: 'FCP XML', extensions: ['fcpxml'] }],
-		edl: [{ name: 'Edit Decision List', extensions: ['edl'] }],
-		aaf: [{ name: 'AAF', extensions: ['aaf'] }]
+		edl: [{ name: 'Edit Decision List', extensions: ['edl'] }]
 	};
 
 	const QUALITY_LABELS: { value: VideoQuality; label: string }[] = [

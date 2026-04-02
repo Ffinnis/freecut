@@ -23,6 +23,14 @@ describe('secondsToTimecode', () => {
   it('handles exact hours', () => {
     expect(secondsToTimecode(3600, 30)).toBe('01:00:00:00');
   });
+
+  it('produces integer frames at 29.97fps', () => {
+    expect(secondsToTimecode(1, 29.97)).toBe('00:00:01:00');
+  });
+
+  it('produces integer frames at 23.976fps', () => {
+    expect(secondsToTimecode(1.5, 23.976)).toBe('00:00:01:12');
+  });
 });
 
 describe('generateEdl', () => {
@@ -49,20 +57,56 @@ describe('generateEdl', () => {
   });
 });
 
+const DEFAULT_MEDIA = { width: 1920, height: 1080, hasVideo: true, hasAudio: true };
+
 describe('generateFcpXml', () => {
   it('produces valid FCP XML with correct structure', () => {
-    const xml = generateFcpXml(SEGMENTS, 'TestProject', 30, '/path/to/source.mp4', 12);
+    const xml = generateFcpXml(SEGMENTS, 'TestProject', 30, '/path/to/source.mp4', 12, DEFAULT_MEDIA);
     expect(xml).toContain('<?xml version="1.0"');
     expect(xml).toContain('<fcpxml version="1.11">');
     expect(xml).toContain('name="TestProject"');
     expect(xml).toContain('src="file:///path/to/source.mp4"');
-    expect(xml).toContain('frameDuration="1001/30000s"');
-    // 3 clip elements
+    expect(xml).toContain('frameDuration="1/30s"');
     expect((xml.match(/<clip /g) || []).length).toBe(3);
   });
 
   it('handles 24fps frame duration', () => {
-    const xml = generateFcpXml(SEGMENTS, 'Test', 24, '/path/source.mp4', 12);
-    expect(xml).toContain('frameDuration="1001/24000s"');
+    const xml = generateFcpXml(SEGMENTS, 'Test', 24, '/path/source.mp4', 12, DEFAULT_MEDIA);
+    expect(xml).toContain('frameDuration="1/24s"');
+  });
+
+  it('uses NTSC duration for 29.97fps', () => {
+    const xml = generateFcpXml(SEGMENTS, 'Test', 29.97, '/path/source.mp4', 12, DEFAULT_MEDIA);
+    expect(xml).toContain('frameDuration="1001/30000s"');
+  });
+
+  it('uses actual dimensions from probe data', () => {
+    const media = { width: 3840, height: 2160, hasVideo: true, hasAudio: true };
+    const xml = generateFcpXml(SEGMENTS, 'Test', 30, '/path/source.mp4', 12, media);
+    expect(xml).toContain('width="3840"');
+    expect(xml).toContain('height="2160"');
+    expect(xml).not.toContain('width="1920"');
+  });
+
+  it('sets hasVideo="0" for audio-only media', () => {
+    const media = { width: 0, height: 0, hasVideo: false, hasAudio: true };
+    const xml = generateFcpXml(SEGMENTS, 'Podcast', 25, '/path/podcast.mp3', 180, media);
+    expect(xml).toContain('hasVideo="0"');
+    expect(xml).toContain('hasAudio="1"');
+    expect(xml).not.toContain('width=');
+    expect(xml).not.toContain('height=');
+  });
+
+  it('emits audio clip refs for audio-only media', () => {
+    const media = { width: 0, height: 0, hasVideo: false, hasAudio: true };
+    const xml = generateFcpXml(SEGMENTS, 'Podcast', 25, '/path/podcast.mp3', 180, media);
+    expect(xml).toContain('<audio ref="r2"');
+    expect(xml).not.toContain('<video ref=');
+  });
+
+  it('emits video clip refs for video media', () => {
+    const xml = generateFcpXml(SEGMENTS, 'Test', 30, '/path/source.mp4', 12, DEFAULT_MEDIA);
+    expect(xml).toContain('<video ref="r2"');
+    expect(xml).not.toContain('<audio ref=');
   });
 });

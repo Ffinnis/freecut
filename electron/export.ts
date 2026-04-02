@@ -53,6 +53,19 @@ export function qualityArgs(quality: VideoQuality, sourceBitrate: number): strin
   }
 }
 
+export function proResQualityArgs(quality: VideoQuality): string[] {
+  switch (quality) {
+    case 'low':
+      return ['-profile:v', '0'];      // ProRes 422 Proxy
+    case 'medium':
+      return ['-profile:v', '1'];      // ProRes 422 LT
+    case 'high':
+      return ['-profile:v', '3'];      // ProRes 422 HQ
+    case 'original':
+      return ['-profile:v', '3'];      // ProRes 422 HQ
+  }
+}
+
 function parseTimeProgress(line: string): number | null {
   const match = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
   if (!match) return null;
@@ -90,8 +103,14 @@ export function runExport(options: ExportOptions): Promise<{ success: boolean; e
 
   if (hasVideo) {
     args.push('-map', '[vout]', '-map', '[aout]');
-    args.push(...qualityArgs(quality, sourceBitrate));
-    args.push('-c:v', 'libx264', '-c:a', 'aac');
+
+    if (format === 'mov') {
+      args.push(...proResQualityArgs(quality));
+      args.push('-c:v', 'prores_ks', '-pix_fmt', 'yuv422p10le', '-c:a', 'pcm_s16le');
+    } else {
+      args.push(...qualityArgs(quality, sourceBitrate));
+      args.push('-c:v', 'libx264', '-c:a', 'aac');
+    }
   } else {
     args.push('-map', '[aout]');
 

@@ -15,7 +15,7 @@ export interface WaveformChunk extends WaveformData {
 	progress: number;
 }
 
-export type ExportFormat = 'mp4' | 'mov' | 'wav' | 'mp3' | 'fcpxml' | 'edl' | 'aaf';
+export type ExportFormat = 'mp4' | 'mov' | 'wav' | 'mp3' | 'fcpxml' | 'edl';
 
 export type VideoQuality = 'low' | 'medium' | 'high' | 'original';
 

@@ -236,21 +236,27 @@ function registerIpcHandlers() {
 		quality?: string;
 		framerate?: number;
 	}) => {
-		const editorFormats = ['edl', 'fcpxml', 'aaf'];
+		const editorFormats = ['edl', 'fcpxml'];
 
 		if (editorFormats.includes(request.format)) {
 			const probeResult = await probeFile(request.sourceFile);
-			const fps = request.framerate ?? probeResult.fps;
+			const fps = request.framerate ?? probeResult.fps || 25;
 			const title = request.sourceFile.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Untitled';
 
 			return writeEditorFile(
 				request.outputPath,
 				request.segments,
-				request.format as 'edl' | 'fcpxml' | 'aaf',
+				request.format as 'edl' | 'fcpxml',
 				title,
 				fps,
 				request.sourceFile,
-				probeResult.duration
+				probeResult.duration,
+				{
+					width: probeResult.width,
+					height: probeResult.height,
+					hasVideo: probeResult.videoCodec !== '',
+					hasAudio: probeResult.audioCodec !== '',
+				}
 			);
 		}
 

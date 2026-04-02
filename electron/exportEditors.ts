@@ -5,10 +5,18 @@ interface ExportSegment {
   end: number;
 }
 
+interface FcpMediaInfo {
+  width: number;
+  height: number;
+  hasVideo: boolean;
+  hasAudio: boolean;
+}
+
 export function secondsToTimecode(seconds: number, fps: number): string {
+  const nominalFps = Math.round(fps);
   const totalFrames = Math.round(seconds * fps);
-  const f = totalFrames % fps;
-  const totalSeconds = Math.floor(totalFrames / fps);
+  const f = totalFrames % nominalFps;
+  const totalSeconds = Math.floor(totalFrames / nominalFps);
   const s = totalSeconds % 60;
   const totalMinutes = Math.floor(totalSeconds / 60);
   const m = totalMinutes % 60;
@@ -55,15 +63,14 @@ export function generateEdl(
 function frameDurationStr(fps: number): string {
   const ntscRates: Record<number, string> = {
     23.976: '1001/24000s',
-    24: '1001/24000s',
     29.97: '1001/30000s',
-    30: '1001/30000s',
-    59.94: '1001/60000s',
-    60: '1001/60000s'
+    59.94: '1001/60000s'
   };
 
   const rounded = Math.round(fps * 100) / 100;
-  return ntscRates[rounded] ?? `100/${Math.round(fps * 100)}s`;
+  if (ntscRates[rounded]) return ntscRates[rounded];
+
+  return `1/${Math.round(fps)}s`;
 }
 
 function secondsToFcpTime(seconds: number, fps: number): string {
@@ -77,13 +84,22 @@ export function generateFcpXml(
   title: string,
   fps: number,
   sourceFilePath: string,
-  sourceDuration: number
+  sourceDuration: number,
+  media: FcpMediaInfo
 ): string {
   const fd = frameDurationStr(fps);
   const fileUrl = `file://${sourceFilePath}`;
   const totalEditDuration = segments.reduce((sum, s) => sum + (s.end - s.start), 0);
   const totalEditTime = secondsToFcpTime(totalEditDuration, fps);
   const srcDurTime = secondsToFcpTime(sourceDuration, fps);
+
+  const formatAttrs = media.hasVideo
+    ? `name="FFVideoFormat" frameDuration="${fd}" width="${media.width}" height="${media.height}"`
+    : `name="FFAudioFormat" frameDuration="${fd}"`;
+  const hasVideoAttr = media.hasVideo ? '1' : '0';
+  const hasAudioAttr = media.hasAudio ? '1' : '0';
+  const refTag = media.hasVideo ? 'video' : 'audio';
+  const extraAttrs = !media.hasVideo ? ' srcCh="1, 2"' : '';
 
   let clipXml = '';
   let offset = 0;
@@ -95,7 +111,7 @@ export function generateFcpXml(
     const startTime = secondsToFcpTime(seg.start, fps);
 
     clipXml += `                <clip name="${title}" offset="${offsetTime}" duration="${durationTime}" start="${startTime}" tcFormat="NDF">
-                    <video ref="r2" offset="${startTime}" duration="${durationTime}" start="${startTime}" />
+                    <${refTag} ref="r2" offset="${startTime}" duration="${durationTime}" start="${startTime}"${extraAttrs} />
                 </clip>\n`;
 
     offset += duration;
@@ -105,8 +121,8 @@ export function generateFcpXml(
 <!DOCTYPE fcpxml>
 <fcpxml version="1.11">
     <resources>
-        <format id="r1" name="FFVideoFormat" frameDuration="${fd}" width="1920" height="1080" />
-        <asset id="r2" name="${title}" src="${fileUrl}" start="0s" duration="${srcDurTime}" hasVideo="1" hasAudio="1" />
+        <format id="r1" ${formatAttrs} />
+        <asset id="r2" name="${title}" src="${fileUrl}" start="0s" duration="${srcDurTime}" hasVideo="${hasVideoAttr}" hasAudio="${hasAudioAttr}" />
     </resources>
     <library>
         <event name="${title}">
@@ -123,23 +139,15 @@ ${clipXml.trimEnd()}
 `;
 }
 
-export function generateAaf(
-  segments: ExportSegment[],
-  _title: string,
-  _fps: number,
-  _sourceFilePath: string
-): Buffer {
-  throw new Error('AAF export not yet implemented — use EDL or FCP XML instead');
-}
-
 export async function writeEditorFile(
   outputPath: string,
   segments: ExportSegment[],
-  format: 'edl' | 'fcpxml' | 'aaf',
+  format: 'edl' | 'fcpxml',
   title: string,
   fps: number,
   sourceFilePath: string,
-  sourceDuration: number
+  sourceDuration: number,
+  media?: FcpMediaInfo
 ): Promise<{ success: boolean; error?: string }> {
   try {
     let content: string | Buffer;
@@ -149,10 +157,8 @@ export async function writeEditorFile(
         content = generateEdl(segments, title, fps);
         break;
       case 'fcpxml':
-        content = generateFcpXml(segments, title, fps, sourceFilePath, sourceDuration);
-        break;
-      case 'aaf':
-        content = generateAaf(segments, title, fps, sourceFilePath);
+        content = generateFcpXml(segments, title, fps, sourceFilePath, sourceDuration,
+          media ?? { width: 1920, height: 1080, hasVideo: true, hasAudio: true });
         break;
     }
 

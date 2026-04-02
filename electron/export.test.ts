@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFilterComplex, qualityArgs } from './export';
+import { buildFilterComplex, qualityArgs, proResQualityArgs } from './export';
 
 describe('buildFilterComplex', () => {
   it('builds correct filter for single segment', () => {
@@ -73,5 +73,23 @@ describe('qualityArgs', () => {
     const args = qualityArgs('original', 5000000);
     expect(args).toContain('-b:v');
     expect(args).toContain('5000000');
+  });
+});
+
+describe('proResQualityArgs', () => {
+  it('returns profile 0 for low quality', () => {
+    expect(proResQualityArgs('low')).toEqual(['-profile:v', '0']);
+  });
+
+  it('returns profile 1 for medium quality', () => {
+    expect(proResQualityArgs('medium')).toEqual(['-profile:v', '1']);
+  });
+
+  it('returns profile 3 for high quality', () => {
+    expect(proResQualityArgs('high')).toEqual(['-profile:v', '3']);
+  });
+
+  it('returns profile 3 for original quality', () => {
+    expect(proResQualityArgs('original')).toEqual(['-profile:v', '3']);
   });
 });
