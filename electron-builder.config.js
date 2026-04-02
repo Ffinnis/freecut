@@ -20,7 +20,14 @@ const config = {
 	}],
 	mac: {
 		target: ['dmg', 'zip'],
-		category: 'public.app-category.video'
+		category: 'public.app-category.video',
+		icon: 'build/icons/icon.icns'
+	},
+	win: {
+		icon: 'build/icons/icon.ico'
+	},
+	linux: {
+		icon: 'build/icons/icon.png'
 	}
 };
 
