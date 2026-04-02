@@ -78,6 +78,12 @@
 
 	// --- Collapsed mode clock (handles ALL collapsed logic) ---
 
+	function stopCollapsedPlayback(el: HTMLVideoElement, dur: number) {
+		el.pause();
+		uiState.setPlaybackTime(dur, dur);
+		uiState.setPlaybackState(false);
+	}
+
 	function collapsedClock() {
 		const tl = projectState.editTimeline;
 		const dur = getEditDuration(tl);
@@ -101,35 +107,35 @@
 
 		const seg = tl[segIdx];
 		if (!seg) {
-			active.pause();
-			uiState.setPlaybackTime(dur, dur);
-			uiState.setPlaybackState(false);
+			stopCollapsedPlayback(active, dur);
 			return;
 		}
 
 		const sourceTime = active.currentTime;
+
+		// Guard: invalid currentTime (NaN from failed seek, etc.)
+		if (!Number.isFinite(sourceTime)) {
+			active.currentTime = seg.sourceStart;
+			playbackFrame = requestAnimationFrame(collapsedClock);
+			return;
+		}
+
+		// Guard: video is before segment start (seek didn't complete)
+		if (sourceTime < seg.sourceStart - 0.05) {
+			active.currentTime = seg.sourceStart;
+			playbackFrame = requestAnimationFrame(collapsedClock);
+			return;
+		}
+
 		const editTime = sourceToEdit(sourceTime, tl);
 		uiState.setPlaybackTime(editTime, dur);
 
-		// Pre-seek standby 1s before end
+		// Check segment boundary FIRST (before standby logic)
 		const standbyKey: 'A' | 'B' = activeIs === 'A' ? 'B' : 'A';
 		const standby = vid(standbyKey);
 		const nextSeg = tl[segIdx + 1];
 		const timeToEnd = seg.sourceEnd - sourceTime;
 
-		if (nextSeg && standby && timeToEnd < 1.0 && timeToEnd > 0.15) {
-			const diff = Math.abs(standby.currentTime - nextSeg.sourceStart);
-			if (diff > 0.1) {
-				standby.currentTime = nextSeg.sourceStart;
-			}
-		}
-
-		// Pre-play standby 150ms before end (so it's already producing frames at swap)
-		if (nextSeg && standby && standby.paused && timeToEnd < 0.15 && timeToEnd > 0.02) {
-			void standby.play().catch(() => {});
-		}
-
-		// Swap at segment boundary — standby is already playing
 		if (sourceTime >= seg.sourceEnd - 0.02) {
 			if (nextSeg && standby) {
 				active.pause();
@@ -137,10 +143,21 @@
 				setVisible(activeIs);
 				segIdx++;
 			} else {
-				active.pause();
-				uiState.setPlaybackTime(dur, dur);
-				uiState.setPlaybackState(false);
+				stopCollapsedPlayback(active, dur);
 				return;
+			}
+		} else {
+			// Pre-seek standby 1s before end
+			if (nextSeg && standby && timeToEnd < 1.0 && timeToEnd > 0.15) {
+				const diff = Math.abs(standby.currentTime - nextSeg.sourceStart);
+				if (diff > 0.1) {
+					standby.currentTime = nextSeg.sourceStart;
+				}
+			}
+
+			// Pre-play standby 150ms before end (so it's already producing frames at swap)
+			if (nextSeg && standby && standby.paused && timeToEnd < 0.15 && timeToEnd > 0.02) {
+				void standby.play().catch(() => {});
 			}
 		}
 
