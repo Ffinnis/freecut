@@ -240,7 +240,7 @@ function registerIpcHandlers() {
 
 		if (editorFormats.includes(request.format)) {
 			const probeResult = await probeFile(request.sourceFile);
-			const fps = request.framerate ?? probeResult.fps || 25;
+			const fps = request.framerate ?? (probeResult.fps || 25);
 			const title = request.sourceFile.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Untitled';
 
 			return writeEditorFile(

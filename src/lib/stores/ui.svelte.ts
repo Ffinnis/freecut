@@ -10,6 +10,7 @@ class UIState {
 	showCustomize = $state(false);
 	selectedSegmentId = $state<string | null>(null);
 	silenceRemoved = $state(false);
+	playbackRate = $state(1);
 
 	get formattedTimecode(): string {
 		const total = Math.floor(this.currentTime);
@@ -50,12 +51,17 @@ class UIState {
 		this.silenceRemoved = !this.silenceRemoved;
 	}
 
+	setPlaybackRate(rate: number) {
+		this.playbackRate = Math.min(Math.max(rate, 0.25), 8);
+	}
+
 	resetPlayback() {
 		this.isPlaying = false;
 		this.currentTime = 0;
 		this.requestedSeekTime = 0;
 		this.seekRequestId = crypto.randomUUID();
 		this.silenceRemoved = false;
+		this.playbackRate = 1;
 	}
 
 	selectSegment(segmentId: string | null) {

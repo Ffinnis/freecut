@@ -7,6 +7,7 @@
 
 	const RULER_HEIGHT = 24;
 	const TRACK_ROW_HEIGHT = 48;
+	const EDGE_HIT_ZONE = 6;
 
 	let filename = $derived(
 		projectState.project?.sourceFile.split('/').pop() ?? ''
@@ -27,6 +28,13 @@
 				)
 			: []
 	);
+	let trackDividers = $derived.by(() => {
+		if (uiState.silenceRemoved) {
+			return projectState.editTimeline.slice(1).map((clip) => clip.editStart);
+		}
+
+		return projectState.project?.segments.slice(1).map((segment) => segment.start) ?? [];
+	});
 
 	let pps = $derived(computePps(uiState.zoomFraction, uiState.viewportWidth, duration));
 	let contentWidth = $derived(computeContentWidth(pps, duration, uiState.viewportWidth));
@@ -37,6 +45,9 @@
 	let prevPps = 0;
 	let isSeeking = $state(false);
 	let activePointerId = $state<number | null>(null);
+	let draggingEdge = $state<{ segmentId: string; edge: 'start' | 'end' } | null>(null);
+	let hoverEdge = $state(false);
+	let dragRafPending = false;
 
 	$effect(() => {
 		if (!scrollContainer) return;
@@ -99,8 +110,47 @@
 		return localY >= audioTrackTop && localY <= audioTrackBottom;
 	}
 
+	function pointerLocalX(event: PointerEvent): number {
+		if (!scrollContainer) return 0;
+		const rect = scrollContainer.getBoundingClientRect();
+		return scrollContainer.scrollLeft + event.clientX - rect.left;
+	}
+
+	function findEdgeAtPointer(event: PointerEvent): { segmentId: string; edge: 'start' | 'end' } | null {
+		if (uiState.silenceRemoved || !projectState.project || !isAudioTrackPointer(event)) return null;
+
+		const px = pointerLocalX(event);
+		const segments = projectState.project.segments;
+
+		for (let i = 0; i < segments.length; i++) {
+			const seg = segments[i];
+			const startPx = timeToPixel(seg.start, pps);
+			const endPx = timeToPixel(seg.end, pps);
+
+			if (startPx < px - EDGE_HIT_ZONE * 3 && endPx > px + EDGE_HIT_ZONE * 3) continue;
+
+			if (Math.abs(px - endPx) <= EDGE_HIT_ZONE && i < segments.length - 1) {
+				return { segmentId: seg.id, edge: 'end' };
+			}
+			if (Math.abs(px - startPx) <= EDGE_HIT_ZONE && i > 0) {
+				return { segmentId: seg.id, edge: 'start' };
+			}
+		}
+		return null;
+	}
+
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 || !projectState.hasProject) return;
+
+		const edge = findEdgeAtPointer(event);
+		if (edge) {
+			draggingEdge = edge;
+			activePointerId = event.pointerId;
+			projectState.startDrag();
+			uiState.selectSegment(edge.segmentId);
+			event.preventDefault();
+			return;
+		}
 
 		if (!uiState.silenceRemoved && isAudioTrackPointer(event)) {
 			const clickedSegment = projectState.findSegmentAtTime(pointerTime(event));
@@ -119,22 +169,52 @@
 	}
 
 	function handlePointerMove(event: PointerEvent) {
-		if (!isSeeking || activePointerId !== event.pointerId) return;
-		seekFromPointer(event);
+		if (activePointerId !== event.pointerId) return;
+
+		if (draggingEdge) {
+			if (dragRafPending) return;
+			dragRafPending = true;
+			const time = pointerTime(event);
+			requestAnimationFrame(() => {
+				dragRafPending = false;
+				if (draggingEdge) {
+					projectState.resizeSegmentEdge(draggingEdge.segmentId, draggingEdge.edge, time);
+				}
+			});
+			return;
+		}
+
+		if (isSeeking) {
+			seekFromPointer(event);
+		}
 	}
 
-	function stopSeeking(event: PointerEvent) {
-		if (!isSeeking || activePointerId !== event.pointerId) return;
+	function handlePointerHover(event: PointerEvent) {
+		if (isSeeking || draggingEdge) return;
+		hoverEdge = findEdgeAtPointer(event) !== null;
+	}
 
-		isSeeking = false;
-		activePointerId = null;
+	function stopInteraction(event: PointerEvent) {
+		if (activePointerId !== event.pointerId) return;
+
+		if (draggingEdge) {
+			projectState.endDrag();
+			draggingEdge = null;
+			activePointerId = null;
+			return;
+		}
+
+		if (isSeeking) {
+			isSeeking = false;
+			activePointerId = null;
+		}
 	}
 
 	$effect(() => {
-		if (typeof window === 'undefined' || !isSeeking) return;
+		if (typeof window === 'undefined' || (!isSeeking && !draggingEdge)) return;
 
 		const handleMove = (event: PointerEvent) => handlePointerMove(event);
-		const handleStop = (event: PointerEvent) => stopSeeking(event);
+		const handleStop = (event: PointerEvent) => stopInteraction(event);
 
 		window.addEventListener('pointermove', handleMove);
 		window.addEventListener('pointerup', handleStop);
@@ -194,8 +274,11 @@
 		<div
 			class="content-sizer"
 			class:seeking={isSeeking}
+			class:edge-hover={hoverEdge}
+			class:edge-dragging={draggingEdge !== null}
 			style="width: {contentWidth}px"
 			onpointerdown={handlePointerDown}
+			onpointermove={handlePointerHover}
 		>
 			<div class="ruler-area">
 				<TimeRuler {pps} {duration} />
@@ -205,12 +288,10 @@
 				<div class="track video-track">
 					<div class="track-bar" style="width: {trackWidth}px">
 						<span class="track-filename">{filename}</span>
-						{#if uiState.silenceRemoved && projectState.editTimeline.length > 1}
+						{#if trackDividers.length > 0}
 							<div class="track-dividers">
-								{#each projectState.editTimeline as clip, i}
-									{#if i > 0}
-										<div class="track-divider" style="left: {clip.editStart * pps}px"></div>
-									{/if}
+								{#each trackDividers as divider}
+									<div class="track-divider" style="left: {divider * pps}px"></div>
 								{/each}
 							</div>
 						{/if}
@@ -230,12 +311,10 @@
 								thresholdValue={uiState.silenceRemoved ? 0 : projectState.settings.thresholdValue}
 								height={TRACK_ROW_HEIGHT}
 							/>
-							{#if uiState.silenceRemoved && projectState.editTimeline.length > 1}
+							{#if trackDividers.length > 0}
 								<div class="waveform-dividers">
-									{#each projectState.editTimeline as clip, i}
-										{#if i > 0}
-											<div class="waveform-divider" style="left: {clip.editStart * pps}px"></div>
-										{/if}
+									{#each trackDividers as divider}
+										<div class="waveform-divider" style="left: {divider * pps}px"></div>
 									{/each}
 								</div>
 							{/if}
@@ -293,6 +372,14 @@
 
 	.content-sizer.seeking {
 		cursor: ew-resize;
+	}
+
+	.content-sizer.edge-hover {
+		cursor: col-resize;
+	}
+
+	.content-sizer.edge-dragging {
+		cursor: col-resize;
 	}
 
 	.gutter {

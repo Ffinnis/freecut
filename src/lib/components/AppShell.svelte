@@ -42,8 +42,24 @@
 	$effect(() => {
 		if (typeof window === 'undefined') return;
 
+		const isMac = navigator.platform.startsWith('Mac');
+
 		const handleKeydown = (event: KeyboardEvent) => {
 			if (event.defaultPrevented || event.repeat || isEditableTarget(event.target)) return;
+
+			const mod = isMac ? event.metaKey : event.ctrlKey;
+
+			if (mod && event.key === 'z' && !event.shiftKey) {
+				event.preventDefault();
+				projectState.applyUndo();
+				return;
+			}
+
+			if (mod && event.key === 'z' && event.shiftKey) {
+				event.preventDefault();
+				projectState.applyRedo();
+				return;
+			}
 
 			if (event.code === 'Space') {
 				if (!projectState.hasProject) return;
@@ -57,6 +73,78 @@
 					event.preventDefault();
 					event.stopPropagation();
 				}
+				return;
+			}
+
+			if (mod && event.key === 'e') {
+				event.preventDefault();
+				uiState.activeTab = 'export';
+				return;
+			}
+
+			if (!projectState.hasProject) return;
+
+			if (event.key === 'ArrowRight') {
+				event.preventDefault();
+				const currentId = uiState.selectedSegmentId;
+				if (currentId) {
+					const nextId = projectState.adjacentSegmentId(currentId, 1);
+					const seg = projectState.findSegmentById(nextId);
+					if (seg) {
+						uiState.selectSegment(seg.id);
+						uiState.requestSeek(seg.start, projectState.totalDuration);
+					}
+				} else {
+					const seg = projectState.findSegmentAtTime(uiState.currentTime);
+					if (seg) uiState.selectSegment(seg.id);
+				}
+				return;
+			}
+
+			if (event.key === 'ArrowLeft') {
+				event.preventDefault();
+				const currentId = uiState.selectedSegmentId;
+				if (currentId) {
+					const prevId = projectState.adjacentSegmentId(currentId, -1);
+					const seg = projectState.findSegmentById(prevId);
+					if (seg) {
+						uiState.selectSegment(seg.id);
+						uiState.requestSeek(seg.start, projectState.totalDuration);
+					}
+				} else {
+					const seg = projectState.findSegmentAtTime(uiState.currentTime);
+					if (seg) uiState.selectSegment(seg.id);
+				}
+				return;
+			}
+
+			if (event.key === 'k' || event.key === 'K') {
+				event.preventDefault();
+				uiState.togglePlayback();
+				return;
+			}
+
+			if (event.key === 'l' || event.key === 'L') {
+				event.preventDefault();
+				if (!uiState.isPlaying) {
+					uiState.setPlaybackRate(1);
+					uiState.setPlaybackState(true);
+				} else {
+					const next = Math.min(uiState.playbackRate * 2, 8);
+					uiState.setPlaybackRate(next);
+				}
+				return;
+			}
+
+			if (event.key === 'j' || event.key === 'J') {
+				event.preventDefault();
+				if (uiState.isPlaying && uiState.playbackRate > 1) {
+					uiState.setPlaybackRate(uiState.playbackRate / 2);
+				} else {
+					const t = Math.max(uiState.currentTime - 0.5, 0);
+					uiState.requestSeek(t, projectState.totalDuration);
+				}
+				return;
 			}
 		};
 

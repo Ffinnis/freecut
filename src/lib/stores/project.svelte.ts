@@ -1,7 +1,14 @@
 import { DEFAULT_SETTINGS, type Project, type DetectionSettings } from '$lib/types/project';
-import { buildEditTimeline, getEditDuration, type EditSegment } from '$lib/utils/editTimeline';
+import {
+	buildEditTimeline,
+	editToSource,
+	findEditSegmentAtTime,
+	getEditDuration,
+	type EditSegment
+} from '$lib/utils/editTimeline';
 import type { WaveformData, WaveformChunk } from '$lib/types/ipc';
 import { uiState } from './ui.svelte';
+import { historyState } from './history.svelte';
 import { detectSilenceSegments } from '$lib/utils/silenceDetection';
 import { INTENSITY_PRESETS, type IntensityPreset, type Segment } from '$lib/types/project';
 
@@ -196,6 +203,7 @@ class ProjectState {
 		this.settings.thresholdValue = result.thresholdValue;
 		this.project.settings = { ...this.settings };
 		this.project.segments = result.segments;
+		historyState.clear();
 		uiState.selectSegment(null);
 	}
 
@@ -230,6 +238,37 @@ class ProjectState {
 		return null;
 	}
 
+	private commitSegments(next: Segment[]) {
+		if (!this.project) return;
+		historyState.pushSnapshot(this.project.segments);
+		this.project.segments = next;
+	}
+
+	applyUndo() {
+		if (!this.project) return false;
+		const snapshot = historyState.undo(this.project.segments);
+		if (!snapshot) return false;
+		this.project.segments = snapshot;
+		return true;
+	}
+
+	applyRedo() {
+		if (!this.project) return false;
+		const snapshot = historyState.redo(this.project.segments);
+		if (!snapshot) return false;
+		this.project.segments = snapshot;
+		return true;
+	}
+
+	startDrag() {
+		if (!this.project) return;
+		historyState.startDrag(this.project.segments);
+	}
+
+	endDrag() {
+		historyState.endDrag();
+	}
+
 	toggleSegmentAction(segmentId: string | null) {
 		if (!segmentId || !this.project) return false;
 
@@ -245,8 +284,125 @@ class ProjectState {
 			action: nextAction
 		};
 
-		this.project.segments = nextSegments;
+		this.commitSegments(nextSegments);
 		return true;
+	}
+
+	splitSegmentAtTime(time: number): boolean {
+		if (!this.project) return false;
+
+		const segments = this.project.segments;
+		const index = segments.findIndex((s) => time > s.start && time < s.end);
+		if (index === -1) return false;
+
+		const segment = segments[index];
+		const MIN_SEGMENT_DURATION = 0.05;
+		if (time - segment.start < MIN_SEGMENT_DURATION || segment.end - time < MIN_SEGMENT_DURATION) {
+			return false;
+		}
+
+		const first: Segment = { ...segment, id: crypto.randomUUID(), end: time };
+		const second: Segment = { ...segment, id: crypto.randomUUID(), start: time };
+
+		const nextSegments = segments.slice();
+		nextSegments.splice(index, 1, first, second);
+		this.commitSegments(nextSegments);
+		uiState.selectSegment(null);
+		return true;
+	}
+
+	splitSegmentAtEditTime(editTime: number): boolean {
+		if (!this.project) return false;
+
+		const timeline = buildEditTimeline(this.project.segments);
+		if (timeline.length === 0) return false;
+
+		const found = findEditSegmentAtTime(editTime, timeline);
+		if (!found) return false;
+
+		return this.splitSegmentAtTime(editToSource(editTime, timeline));
+	}
+
+	resizeSegmentEdge(segmentId: string, edge: 'start' | 'end', newTime: number): boolean {
+		if (!this.project) return false;
+
+		const segments = this.project.segments;
+		const index = segments.findIndex((s) => s.id === segmentId);
+		if (index === -1) return false;
+
+		const MIN_WIDTH = 0.05;
+		const segment = segments[index];
+		let clamped = newTime;
+
+		if (edge === 'start') {
+			const minBound = index > 0 ? segments[index - 1].start + MIN_WIDTH : 0;
+			const maxBound = segment.end - MIN_WIDTH;
+			clamped = Math.min(Math.max(clamped, minBound), maxBound);
+
+			const nextSegments = segments.slice();
+			nextSegments[index] = { ...segment, start: clamped };
+			if (index > 0) {
+				nextSegments[index - 1] = { ...segments[index - 1], end: clamped };
+			}
+			if (historyState.isDragging) {
+				this.project.segments = nextSegments;
+			} else {
+				this.commitSegments(nextSegments);
+			}
+		} else {
+			const minBound = segment.start + MIN_WIDTH;
+			const maxBound = index < segments.length - 1 ? segments[index + 1].end - MIN_WIDTH : (this.project.duration || Infinity);
+			clamped = Math.min(Math.max(clamped, minBound), maxBound);
+
+			const nextSegments = segments.slice();
+			nextSegments[index] = { ...segment, end: clamped };
+			if (index < segments.length - 1) {
+				nextSegments[index + 1] = { ...segments[index + 1], start: clamped };
+			}
+			if (historyState.isDragging) {
+				this.project.segments = nextSegments;
+			} else {
+				this.commitSegments(nextSegments);
+			}
+		}
+
+		return true;
+	}
+
+	setAllSegmentsAction(action: 'keep' | 'remove'): void {
+		if (!this.project) return;
+		this.commitSegments(this.project.segments.map((s) => ({ ...s, action })));
+	}
+
+	nextSegmentBoundary(fromTime: number): number | null {
+		if (!this.project) return null;
+		const seg = this.findSegmentAtTime(fromTime);
+		if (!seg) return null;
+		const idx = this.project.segments.indexOf(seg);
+		if (idx < this.project.segments.length - 1) {
+			return this.project.segments[idx + 1].start;
+		}
+		return seg.end;
+	}
+
+	prevSegmentBoundary(fromTime: number): number | null {
+		if (!this.project) return null;
+		const seg = this.findSegmentAtTime(fromTime);
+		if (!seg) return null;
+		const idx = this.project.segments.indexOf(seg);
+		if (idx > 0) {
+			return this.project.segments[idx - 1].end;
+		}
+		return seg.start;
+	}
+
+	adjacentSegmentId(currentId: string | null, direction: -1 | 1): string | null {
+		if (!this.project || !currentId) return null;
+		const idx = this.project.segments.findIndex((s) => s.id === currentId);
+		if (idx === -1) return null;
+		const next = idx + direction;
+		if (next < 0 || next >= this.project.segments.length) return null;
+		return this.project.segments[next].id;
 	}
 
 	reset() {
@@ -258,6 +414,7 @@ class ProjectState {
 		this.waveform = null;
 		this.waveformLoading = false;
 		this.waveformRequestId = null;
+		historyState.clear();
 		uiState.selectSegment(null);
 	}
 }

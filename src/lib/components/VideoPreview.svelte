@@ -298,6 +298,13 @@
 			}
 		};
 	});
+
+	// Sync playback rate
+	$effect(() => {
+		const rate = uiState.playbackRate;
+		if (videoA) videoA.playbackRate = rate;
+		if (videoB) videoB.playbackRate = rate;
+	});
 </script>
 
 <div class="preview">

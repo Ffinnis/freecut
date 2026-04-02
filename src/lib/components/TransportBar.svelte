@@ -1,9 +1,28 @@
 <script lang="ts">
 	import { projectState } from '$lib/stores/project.svelte';
 	import { uiState } from '$lib/stores/ui.svelte';
+	import { findEditSegmentAtTime } from '$lib/utils/editTimeline';
 
 	let selectedSegment = $derived(projectState.findSegmentById(uiState.selectedSegmentId));
 	let canToggleSelected = $derived(!!selectedSegment);
+	let canSplit = $derived.by(() => {
+		if (!projectState.hasProject) return false;
+
+		if (uiState.silenceRemoved) {
+			return !!findEditSegmentAtTime(uiState.currentTime, projectState.editTimeline);
+		}
+
+		return !!projectState.findSegmentAtTime(uiState.currentTime);
+	});
+
+	function splitAtPlayhead() {
+		if (uiState.silenceRemoved) {
+			projectState.splitSegmentAtEditTime(uiState.currentTime);
+			return;
+		}
+
+		projectState.splitSegmentAtTime(uiState.currentTime);
+	}
 </script>
 
 <div class="transport">
@@ -17,7 +36,12 @@
 				<span class="badge">{projectState.cutCount}</span>
 			{/if}
 		</button>
-		<button class="transport-btn" aria-label="Cut">
+		<button
+			class="transport-btn"
+			aria-label="Cut"
+			disabled={!canSplit}
+			onclick={splitAtPlayhead}
+		>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<circle cx="6" cy="6" r="3" />
 				<path d="M8.12 8.12L12 12" />
@@ -46,13 +70,32 @@
 				</svg>
 			{/if}
 		</button>
-		<button class="transport-btn" aria-label="Fast forward">
+		<button
+			class="transport-btn"
+			aria-label="Fast forward"
+			disabled={!projectState.hasProject}
+			onclick={() => {
+				const nextId = projectState.adjacentSegmentId(uiState.selectedSegmentId, 1);
+				const seg = projectState.findSegmentById(nextId);
+				if (seg) {
+					uiState.selectSegment(seg.id);
+					uiState.requestSeek(seg.start, projectState.totalDuration);
+				}
+			}}
+		>
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
 				<polygon points="1 4 11 12 1 20 1 4" />
 				<polygon points="13 4 23 12 13 20 13 4" />
 			</svg>
 		</button>
-		<button class="transport-btn skip-btn">skip</button>
+		<button
+			class="transport-btn skip-btn"
+			disabled={!projectState.hasProject}
+			onclick={() => {
+				const t = projectState.nextSegmentBoundary(uiState.currentTime);
+				if (t !== null) uiState.requestSeek(t, projectState.totalDuration);
+			}}
+		>skip</button>
 	</div>
 
 	<div class="right">
