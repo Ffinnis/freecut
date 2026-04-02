@@ -8,6 +8,7 @@ import { extractWaveform } from './waveform';
 import { probeFile } from './probe';
 import { runExport, cancelExport } from './export';
 import { writeEditorFile } from './exportEditors';
+import { initUpdater } from './updater';
 
 const MEDIA_PROTOCOL = 'freecut-media';
 const MEDIA_MIME_TYPES: Record<string, string> = {
@@ -261,6 +262,7 @@ app.whenReady().then(() => {
 	createWindow();
 	installApplicationMenu();
 	registerIpcHandlers();
+	initUpdater(mainWindow!);
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {

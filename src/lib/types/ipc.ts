@@ -63,6 +63,13 @@ export interface ElectronAPI {
 	onExportProgress: (callback: (progress: ExportProgress) => void) => () => void;
 	shellOpenPath: (filePath: string) => Promise<void>;
 	shellShowInFolder: (filePath: string) => Promise<void>;
+	checkForUpdate: () => Promise<void>;
+	downloadUpdate: () => Promise<void>;
+	installUpdate: () => Promise<void>;
+	onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => () => void;
+	onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void;
+	onUpdateDownloaded: (callback: () => void) => () => void;
+	onUpdateError: (callback: (error: { message: string }) => void) => () => void;
 }
 
 declare global {

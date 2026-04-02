@@ -7,6 +7,7 @@
 	import TransportBar from './TransportBar.svelte';
 	import Timeline from './Timeline.svelte';
 	import StatusBar from './StatusBar.svelte';
+	import UpdateNotification from './UpdateNotification.svelte';
 
 	function isEditableTarget(target: EventTarget | null) {
 		if (!(target instanceof HTMLElement)) return false;
@@ -163,6 +164,7 @@
 
 {#if projectState.hasProject}
 	<div class="app-shell has-project">
+		<UpdateNotification />
 		<div class="titlebar-drag"></div>
 		<div class="preview-area">
 			<VideoPreview />
@@ -174,6 +176,7 @@
 	</div>
 {:else}
 	<div class="app-shell empty">
+		<UpdateNotification />
 		<div class="titlebar-drag"></div>
 		<DropZone />
 	</div>

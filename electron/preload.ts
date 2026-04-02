@@ -64,7 +64,38 @@ const electronAPI = {
 
 	shellOpenPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 
-	shellShowInFolder: (filePath: string) => ipcRenderer.invoke('shell:showInFolder', filePath)
+	shellShowInFolder: (filePath: string) => ipcRenderer.invoke('shell:showInFolder', filePath),
+
+	checkForUpdate: () => ipcRenderer.invoke('update:check'),
+	downloadUpdate: () => ipcRenderer.invoke('update:download'),
+	installUpdate: () => ipcRenderer.invoke('update:install'),
+
+	onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, info: { version: string; releaseNotes: string }) =>
+			callback(info);
+		ipcRenderer.on('update:available', handler);
+		return () => ipcRenderer.removeListener('update:available', handler);
+	},
+
+	onUpdateDownloadProgress: (callback: (progress: { percent: number }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, progress: { percent: number }) =>
+			callback(progress);
+		ipcRenderer.on('update:download-progress', handler);
+		return () => ipcRenderer.removeListener('update:download-progress', handler);
+	},
+
+	onUpdateDownloaded: (callback: () => void) => {
+		const handler = () => callback();
+		ipcRenderer.on('update:downloaded', handler);
+		return () => ipcRenderer.removeListener('update:downloaded', handler);
+	},
+
+	onUpdateError: (callback: (error: { message: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, error: { message: string }) =>
+			callback(error);
+		ipcRenderer.on('update:error', handler);
+		return () => ipcRenderer.removeListener('update:error', handler);
+	}
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

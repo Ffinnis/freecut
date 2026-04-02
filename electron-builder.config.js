@@ -13,8 +13,13 @@ const config = {
 	asarUnpack: [
 		'node_modules/ffmpeg-static/**'
 	],
+	publish: [{
+		provider: 'github',
+		owner: 'Ffinnis',
+		repo: 'freecut'
+	}],
 	mac: {
-		target: ['dmg'],
+		target: ['dmg', 'zip'],
 		category: 'public.app-category.video'
 	}
 };
