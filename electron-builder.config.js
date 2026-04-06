@@ -7,8 +7,7 @@ const config = {
 	},
 	files: [
 		'dist/**/*',
-		'build/**/*',
-		'node_modules/**/*'
+		'build/**/*'
 	],
 	asarUnpack: [
 		'node_modules/ffmpeg-static/**'
@@ -21,13 +20,7 @@ const config = {
 	mac: {
 		target: ['dmg', 'zip'],
 		category: 'public.app-category.video',
-		icon: 'build/icons/icon.icns'
-	},
-	win: {
-		icon: 'build/icons/icon.ico'
-	},
-	linux: {
-		icon: 'build/icons/icon.png'
+		icon: 'resources/icon.icns'
 	}
 };
 
